@@ -3,6 +3,7 @@
 # and Copyright (c) 2023 ha-bambulab contributors (MIT).
 # See THIRD_PARTY_NOTICES.md for full notices and pinned revisions.
 from .errors import CliError
+from .protocol import protocol_payload, token
 from .safety import remote_filename
 
 WRITE_COMMANDS = {
@@ -25,6 +26,23 @@ WRITE_COMMANDS = {
     "load",
     "unload",
     "clear-error",
+    "camera-record",
+    "camera-timelapse",
+    "camera-resolution",
+    "camera-capture",
+    "camera-delete-oldest",
+    "xcam",
+    "print-option",
+    "calibration",
+    "nozzle",
+    "chamber",
+    "door",
+    "ams-settings",
+    "select-tool",
+    "delete",
+    "rename",
+    "mkdir",
+    "rmdir",
 }
 
 
@@ -82,7 +100,106 @@ def ams_mapping(value):
 def build_payload(a, *, url=None):
     c = a.command
     section, body = "print", {"command": c.replace("-", "_"), "param": ""}
-    if c in ("pause", "resume", "stop"):
+    if c in ("camera-record", "camera-timelapse", "camera-capture"):
+        section = "camera"
+        body = {
+            "command": {
+                "camera-record": "ipcam_record_set",
+                "camera-timelapse": "ipcam_timelapse",
+                "camera-capture": "ipcam_cap_pic_set",
+            }[c],
+            "control": a.action,
+        }
+    elif c == "camera-resolution":
+        section, body = (
+            "camera",
+            {"command": "ipcam_resolution_set", "resolution": token(a.resolution)},
+        )
+    elif c == "camera-delete-oldest":
+        section, body = (
+            "camera",
+            {
+                "command": "ipcam_delete_oldest_timelapse",
+                "storage": a.storage,
+                "total_layer": integer(a.total_layer, 1, 100000),
+            },
+        )
+    elif c == "xcam":
+        section, body = (
+            "xcam",
+            {
+                "command": "xcam_control_set",
+                "module_name": a.module,
+                "control": a.action == "enable",
+                "enable": a.action == "enable",
+                "print_halt": True,
+            },
+        )
+        if a.sensitivity:
+            body["halt_print_sensitivity"] = a.sensitivity
+    elif c == "print-option":
+        if (
+            a.option in ("air_purification", "nozzle_blob_detect_v2")
+            and a.value not in ("0", "1", "2")
+        ) or (
+            a.option not in ("air_purification", "nozzle_blob_detect_v2")
+            and a.value == "2"
+        ):
+            raise CliError("布尔选项只接受 enable/disable/0/1；枚举选项接受 0/1/2")
+        enabled = a.value in ("enable", "1")
+        body = {
+            "command": "print_option",
+            a.option: integer(int(a.value), 0, 2)
+            if a.option in ("air_purification", "nozzle_blob_detect_v2")
+            else enabled,
+        }
+        if a.option == "auto_recovery":
+            body["option"] = int(enabled)
+    elif c == "calibration":
+        body = {"command": "calibration", "option": integer(a.option, 0, 127)}
+    elif c == "nozzle":
+        if a.protocol == "accessories":
+            section, body = (
+                "system",
+                {
+                    "command": "set_accessories",
+                    "accessory_type": "nozzle",
+                    "nozzle_diameter": a.diameter,
+                    "nozzle_type": a.material,
+                },
+            )
+        else:
+            body = {
+                "command": "set_nozzle",
+                "id": integer(a.id, 0, 255),
+                "diameter": a.diameter,
+                "type": token(a.type),
+                "wear": integer(a.wear, 0, 255),
+            }
+    elif c == "chamber":
+        body = {
+            "command": "set_ctt",
+            "ctt_val": integer(a.temperature, 0, 60),
+            "temper_check": a.temper_check,
+        }
+    elif c == "door":
+        section, body = (
+            "system",
+            {"command": "set_door_stat", "config": integer(a.mode, 0, 2)},
+        )
+    elif c == "ams-settings":
+        body = {
+            "command": "ams_user_setting",
+            "ams_id": integer(a.ams_id, -1, 135),
+            "calibrate_remain_flag": a.calibrate_remain,
+            "startup_read_option": a.startup_read,
+            "tray_read_option": a.tray_read,
+        }
+    elif c == "select-tool":
+        body = {"command": "select_extruder", "extruder_index": integer(a.id, 0, 1)}
+    elif c == "mqtt":
+        return protocol_payload(a.name, a.params)
+    elif c in ("pause", "resume", "stop"):
         pass
     elif c == "print":
         name = remote_filename(a.remote_file)
@@ -113,24 +230,36 @@ def build_payload(a, *, url=None):
             "chamber_light",
             "chamber_light2",
             "heatbed_light",
-        ) or a.action not in ("on", "off"):
+        ) or a.action not in ("on", "off", "flashing"):
             raise CliError("灯光参数无效")
         section = "system"
         body.update(
             command="ledctrl",
             led_node=a.node,
             led_mode=a.action,
-            led_on_time=0 if a.node == "heatbed_light" else 500,
-            led_off_time=0 if a.node == "heatbed_light" else 500,
-            loop_times=0,
-            interval_time=0,
+            led_on_time=integer(
+                a.on_time
+                if a.on_time is not None
+                else (0 if a.node == "heatbed_light" else 500),
+                0,
+                60000,
+            ),
+            led_off_time=integer(
+                a.off_time
+                if a.off_time is not None
+                else (0 if a.node == "heatbed_light" else 500),
+                0,
+                60000,
+            ),
+            loop_times=integer(a.loops, 0, 10000),
+            interval_time=integer(a.interval, 0, 60000),
         )
     elif c == "fan":
-        if a.fan not in ("part", "aux", "chamber"):
+        if a.fan not in ("part", "aux", "chamber", "enhanced"):
             raise CliError("风扇参数无效")
         body.update(
             command="gcode_line",
-            param=f"M106 P{dict(part=1, aux=2, chamber=3)[a.fan]} S{round(integer(a.percent, 0, 100) * 255 / 100)}\n",
+            param=f"M106 P{dict(part=1, aux=2, chamber=3, enhanced=9)[a.fan]} S{round(integer(a.percent, 0, 100) * 255 / 100)}\n",
         )
     elif c == "temp":
         if a.target not in ("nozzle", "bed"):
@@ -159,7 +288,7 @@ def build_payload(a, *, url=None):
             raise CliError("对象编号重复或过多")
         body.update(obj_list=ids)
     elif c == "ams-control":
-        if a.action not in ("resume", "pause", "reset", "done"):
+        if a.action not in ("resume", "pause", "reset", "done", "abort"):
             raise CliError("AMS 控制参数无效")
         body.update(param=a.action)
     elif c in ("ams-rfid", "ams-filament", "ams-drying", "load", "unload"):

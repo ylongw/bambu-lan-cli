@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import ipaddress
 import json
 import re
 from dataclasses import dataclass, field
@@ -24,9 +25,45 @@ def authorize(args, config):
     return auth
 
 
+def private_fields(value):
+    """Retain telemetry structure while suppressing credentials and identities."""
+    if isinstance(value, dict):
+        return {
+            k: (
+                "[REDACTED]"
+                if re.search(
+                    r"access.?code|password|token|secret|(?:^|_)(?:ip|ip_addr|ip_address|mac|mac_address|ssid|bssid)(?:$|_)|(?:^|_)(?:sn|serial|serial_number|device_id|user_id|uid|uuid|tag_uid|tray_uuid|nozzle_sn)(?:$|_)",
+                    k,
+                    re.I,
+                )
+                else private_fields(v)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [private_fields(v) for v in value]
+    if isinstance(value, str):
+        value = re.sub(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s\"<>]+", "[REDACTED_URL]", value)
+        value = re.sub(r"/(?:Users|home)/[^/\s]+", "[REDACTED_HOME]", value)
+
+        def mask_ip(match):
+            try:
+                ipaddress.IPv4Address(match.group())
+                return "[REDACTED_IP]"
+            except ValueError:
+                return match.group()
+
+        value = re.sub(
+            r"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])", mask_ip, value
+        )
+    return value
+
+
 def redact(value, config=None):
     text = (
-        json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+        json.dumps(private_fields(value), ensure_ascii=False)
+        if not isinstance(value, str)
+        else value
     )
     if config:
         for secret in (config.access_code, config.serial, config.host, config.ssh_via):

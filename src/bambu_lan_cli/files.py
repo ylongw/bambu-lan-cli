@@ -25,18 +25,66 @@ def validate_path(path):
         or any(ord(c) < 32 for c in path)
     ):
         raise CliError("目录须为无控制字符的绝对路径")
-    return path
+    return "/" + "/".join(part for part in path.split("/") if part and part != ".")
 
 
 def ftps_operation(config, timeout, operation, path, data=None, authorization=None):
-    if operation != "ls":
-        if operation != "upload" or authorization is None:
+    if operation not in ("ls", "download", "file-info"):
+        if (
+            operation not in ("upload", "delete", "rename", "mkdir", "rmdir")
+            or authorization is None
+        ):
             raise CliError("FTPS 写操作缺少授权")
         authorization.check(config)
-    validate_path(path)
+    path = validate_path(path)
     with open_ftps(config, timeout) as ftp:
         if operation == "ls":
             return {"ftps": "ok", "entries": ftp.root_list(path)}
+        if operation == "file-info":
+            ftp.voidcmd("TYPE I")
+            return {"size": ftp.size(path)}
+        if operation in ("mkdir", "rmdir"):
+            if path == "/":
+                raise CliError("拒绝修改根目录")
+            (ftp.mkd if operation == "mkdir" else ftp.rmd)(path)
+            return {"operation": operation, "acknowledged": True}
+        if operation == "delete":
+            ftp.delete(path)
+            return {"deleted": True, "acknowledged": True}
+        if operation == "rename":
+            data = validate_path(data)
+            names = [
+                name.rsplit("/", 1)[-1]
+                for name in ftp.nlst(data.rsplit("/", 1)[0] or "/")
+            ]
+            if data.rsplit("/", 1)[-1] in names:
+                raise CliError("目标已存在，拒绝覆盖")
+            ftp.rename(path, data)
+            return {"renamed": True, "acknowledged": True}
+        if operation == "download":
+            import base64
+            import hashlib
+            import io
+
+            ftp.voidcmd("TYPE I")
+            expected = ftp.size(path)
+            if expected is not None and expected > 256 * 1024 * 1024:
+                raise CliError("SSH FTPS 下载超过 256 MiB")
+            target = io.BytesIO()
+
+            def receive(chunk):
+                if target.tell() + len(chunk) > 256 * 1024 * 1024:
+                    raise CliError("SSH FTPS 下载超过 256 MiB；请使用直连或 TCP 6000")
+                target.write(chunk)
+
+            ftp.retrbinary("RETR " + path, receive, blocksize=65536)
+            data = target.getvalue()
+            if expected is not None and expected != len(data):
+                raise CliError("FTPS 下载大小不一致")
+            return {
+                "data_b64": base64.b64encode(data).decode(),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
         if operation != "upload":
             raise CliError("不允许的 FTPS 操作")
         import io
@@ -76,6 +124,8 @@ def remote_worker():
     data = sys.stdin.buffer.read(size)
     if len(data) != size:
         raise ValueError
+    if values["operation"] == "rename":
+        data = data.decode("utf-8")
     try:
         result = ftps_operation(
             config,
@@ -88,14 +138,26 @@ def remote_worker():
         reply = {"ok": True, "result": result}
     except Exception:
         reply = {"ok": False}
-    print(json.dumps(reply).replace(config.access_code, "[REDACTED]"))
+    encoded = json.dumps(reply)
+    # Download bytes remain exact inside the encrypted, captured pipe. Never
+    # replace substrings in base64; a coincidental match would corrupt files.
+    print(
+        encoded
+        if values["operation"] == "download"
+        else encoded.replace(config.access_code, "[REDACTED]")
+    )
 
 
 def ssh_ftps(config, args, operation, path, data=None, authorization=None):
-    if operation != "ls":
-        if operation != "upload" or authorization is None:
+    if operation not in ("ls", "download", "file-info"):
+        if (
+            operation not in ("upload", "delete", "rename", "mkdir", "rmdir")
+            or authorization is None
+        ):
             raise CliError("SSH FTPS 写操作缺少授权")
         authorization.check(config)
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     validate_via(args.via)
     source = "\n".join(
         [
@@ -179,7 +241,9 @@ def list_files(config, args):
                 "transport": "TCP6000",
                 "entries": tunnel.list_models(kind=args.kind),
             }
-    path = validate_path(args.path)
+    path = validate_path(
+        "/timelapse" if args.kind == "timelapse" and args.path == "/" else args.path
+    )
     try:
         return (
             ssh_ftps(config, args, "ls", path)
@@ -216,3 +280,115 @@ def upload_file(config, args, authorization):
             config, args.timeout, "upload", "/" + name, data, authorization
         )
     )
+
+
+def save_download(destination, producer):
+    """0600 temporary file, exclusive publish, no partial or overwritten result."""
+    import os
+    import tempfile
+
+    target = Path(destination)
+    if target.exists() or target.is_symlink():
+        raise CliError("本地目标已存在，拒绝覆盖")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent, prefix=".bambu-", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            result = producer(stream.write)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, target)
+        return result
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def download_file(config, args):
+    import base64
+    import hashlib
+
+    if not 1 <= args.max_mib <= 16384:
+        raise CliError("max-mib 须在 1..16384 之间")
+    maximum = args.max_mib * 1024 * 1024
+
+    def produce(sink):
+        if args.internal:
+            with internal_connection(config, args) as tunnel:
+                if getattr(args, "member", None):
+                    return tunnel.archive_member(
+                        args.remote_path, args.member, sink, maximum, args.kind
+                    )
+                return tunnel.download(args.remote_path, args.kind, sink, maximum)
+        path = validate_path(args.remote_path)
+        if args.via:
+            reply = ssh_ftps(config, args, "download", path)
+            data = base64.b64decode(reply["data_b64"], validate=True)
+            if hashlib.sha256(data).hexdigest() != reply.get("sha256"):
+                raise CliError("SSH FTPS 下载校验失败")
+            if len(data) > maximum:
+                raise CliError("下载超过大小上限")
+            sink(data)
+            return {"bytes": len(data), "transport": "SSH FTPS"}
+        count = 0
+
+        def receive(chunk):
+            nonlocal count
+            count += len(chunk)
+            if count > maximum:
+                raise CliError("下载超过大小上限")
+            sink(chunk)
+
+        with open_ftps(config, args.timeout) as ftp:
+            ftp.voidcmd("TYPE I")
+            size = ftp.size(path)
+            if size is not None and size > maximum:
+                raise CliError("下载文件超过大小上限")
+            ftp.retrbinary("RETR " + path, receive, blocksize=65536)
+            if size is not None and size != count:
+                raise CliError("FTPS 下载大小不一致")
+        return {"bytes": count, "transport": "FTPS"}
+
+    return save_download(args.destination, produce)
+
+
+def delete_file(config, args, authorization):
+    authorization.check(config)
+    if args.internal:
+        with internal_connection(config, args) as tunnel:
+            return tunnel.delete(args.remote_path, args.kind, authorization)
+    path = validate_path(args.remote_path)
+    if args.via:
+        return ssh_ftps(config, args, "delete", path, authorization=authorization)
+    return ftps_operation(
+        config, args.timeout, "delete", path, authorization=authorization
+    )
+
+
+def rename_file(config, args, authorization):
+    authorization.check(config)
+    if args.internal:
+        raise CliError("TCP 6000 上游未确认重命名协议；只支持 FTPS")
+    path, new_path = validate_path(args.remote_path), validate_path(args.new_path)
+    if args.via:
+        return ssh_ftps(config, args, "rename", path, new_path, authorization)
+    return ftps_operation(config, args.timeout, "rename", path, new_path, authorization)
+
+
+def directory_operation(config, args, authorization):
+    authorization.check(config)
+    path = validate_path(args.remote_path)
+    if args.via:
+        return ssh_ftps(config, args, args.command, path, authorization=authorization)
+    return ftps_operation(
+        config, args.timeout, args.command, path, authorization=authorization
+    )
+
+
+def file_info(config, args):
+    path = validate_path(args.remote_path)
+    if args.via:
+        return ssh_ftps(config, args, "file-info", path)
+    return ftps_operation(config, args.timeout, "file-info", path)

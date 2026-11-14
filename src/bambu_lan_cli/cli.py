@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -8,8 +9,18 @@ from .common import now_cst
 from .config import init_config, load_config, validate_via
 from .discovery import discover
 from .errors import AckTimeout, CliError
-from .files import internal_connection, list_files, upload_file
+from .files import (
+    delete_file,
+    directory_operation,
+    download_file,
+    file_info,
+    internal_connection,
+    list_files,
+    rename_file,
+    upload_file,
+)
 from .mqtt import status_connection
+from .protocol import CATALOG, PRINT_OPTIONS, XCAM_MODULES, protocol_payload
 from .safety import authorize, redact, remote_filename
 from .tunnel import find_verified_model
 
@@ -48,12 +59,21 @@ def build_parser():
         "hms",
         "discover",
         "media-ability",
+        "camera-status",
+        "get-version",
+        "info",
+        "get-accessories",
+        "protocol-list",
         "pause",
         "resume",
         "stop",
         "unload",
     ):
         p = add(c)
+        if c in ("status", "camera-status", "info", "protocol-list"):
+            p.add_argument(
+                "--json", action="store_true", help="原始结构（敏感字段脱敏）"
+            )
         if c == "unload":
             p.add_argument("--ams-id", type=int, default=0)
             p.add_argument("--slot", type=int, default=0)
@@ -64,7 +84,26 @@ def build_parser():
     p = add("ls")
     p.add_argument("path", nargs="?", default="/")
     p.add_argument("--internal", action="store_true")
-    p.add_argument("--kind", choices=["model", "timelapse"], default="model")
+    p.add_argument("--kind", choices=["model", "timelapse", "video"], default="model")
+    for c in ("download", "delete", "rename"):
+        p = add(c)
+        p.add_argument("remote_path")
+        if c == "download":
+            p.add_argument("destination", help="本地目标；拒绝覆盖")
+            p.add_argument("--max-mib", type=int, default=2048)
+            p.add_argument("--member", help="experimental：TCP 6000 SUB_FILE 归档成员")
+        if c == "rename":
+            p.add_argument("new_path")
+        p.add_argument("--internal", action="store_true")
+        p.add_argument(
+            "--kind", choices=["model", "timelapse", "video"], default="timelapse"
+        )
+    for c in ("mkdir", "rmdir", "file-info"):
+        p = add(c)
+        p.add_argument("remote_path")
+    p = add("project-member")
+    p.add_argument("member")
+    p.add_argument("destination")
     p = add("upload")
     p.add_argument("source")
     p.add_argument("--name")
@@ -83,9 +122,16 @@ def build_parser():
     p.add_argument("level")
     p = add("light")
     p.add_argument("node", choices=["chamber_light", "chamber_light2", "heatbed_light"])
-    p.add_argument("action", choices=["on", "off"])
+    p.add_argument("action", choices=["on", "off", "flashing"])
+    for flag, default in (
+        ("on-time", 500),
+        ("off-time", 500),
+        ("loops", 0),
+        ("interval", 0),
+    ):
+        p.add_argument("--" + flag, type=int, default=default)
     p = add("fan")
-    p.add_argument("fan", choices=["part", "aux", "chamber"])
+    p.add_argument("fan", choices=["part", "aux", "chamber", "enhanced"])
     p.add_argument("percent", type=int)
     p = add("temp")
     p.add_argument("target", choices=["nozzle", "bed"])
@@ -97,7 +143,7 @@ def build_parser():
     p = add("skip-objects")
     p.add_argument("ids")
     p = add("ams-control")
-    p.add_argument("action", choices=["resume", "pause", "reset", "done"])
+    p.add_argument("action", choices=["resume", "pause", "reset", "done", "abort"])
     for c in ("ams-rfid", "ams-drying", "ams-filament", "load"):
         p = add(c)
         p.add_argument("--ams-id", type=int, default=0)
@@ -126,6 +172,63 @@ def build_parser():
     p = add("clear-error")
     p.add_argument("--error-code", type=lambda s: int(s, 0), default=0)
     p.add_argument("--subtask-id", default="0")
+    for c in ("camera-record", "camera-timelapse", "camera-capture"):
+        p = add(c)
+        p.add_argument("action", choices=["enable", "disable"])
+    p = add("camera-resolution")
+    p.add_argument("resolution", help="设备报告的 resolution_supported 值，例如 1080p")
+    p = add("camera-delete-oldest")
+    p.add_argument("--storage", choices=["internal", "sdcard", "usb"], required=True)
+    p.add_argument("--total-layer", type=int, required=True)
+    p = add("camera-snapshot")
+    p.add_argument("destination")
+    p.add_argument("--transport", choices=["auto", "jpeg", "rtsp"], default="auto")
+    p = add("xcam")
+    p.add_argument("module", choices=XCAM_MODULES)
+    p.add_argument("action", choices=["enable", "disable"])
+    p.add_argument("--sensitivity", choices=["never_halt", "low", "medium", "high"])
+    p = add("print-option")
+    p.add_argument("option", choices=PRINT_OPTIONS)
+    p.add_argument("value", choices=["enable", "disable", "0", "1", "2"])
+    p = add("calibration")
+    p.add_argument(
+        "--option", type=lambda s: int(s, 0), required=True, help="校准位掩码 0..127"
+    )
+    p = add("nozzle")
+    p.add_argument(
+        "--protocol", choices=["accessories", "set-nozzle"], default="accessories"
+    )
+    p.add_argument(
+        "--diameter", type=float, choices=[0.2, 0.4, 0.6, 0.8], required=True
+    )
+    p.add_argument(
+        "--material",
+        choices=["hardened_steel", "stainless_steel"],
+        default="hardened_steel",
+    )
+    p.add_argument("--id", type=int, default=0)
+    p.add_argument("--type", default="HH01")
+    p.add_argument("--wear", type=int, default=0)
+    p = add("chamber")
+    p.add_argument("temperature", type=int)
+    p.add_argument(
+        "--temper-check", action=argparse.BooleanOptionalAction, default=True
+    )
+    p = add("door")
+    p.add_argument("mode", type=int, choices=[0, 1, 2])
+    p = add("ams-settings")
+    p.add_argument("--ams-id", type=int, default=0)
+    for flag in ("calibrate-remain", "startup-read", "tray-read"):
+        p.add_argument("--" + flag, action=argparse.BooleanOptionalAction, default=True)
+    p = add("select-tool")
+    p.add_argument("id", type=int, choices=[0, 1])
+    p = add("mqtt")
+    p.add_argument(
+        "name", choices=sorted(CATALOG), help="experimental；来源和字段见 protocol-list"
+    )
+    p.add_argument(
+        "--params", required=True, help="来源 schema 内的 JSON 参数对象；无参数用 {}"
+    )
     return parser
 
 
@@ -147,8 +250,17 @@ def observed_success(command, body, before, after):
 
 
 def dispatch(config, args):
-    if args.command in WRITE_COMMANDS:
+    if args.command == "protocol-list":
+        return CATALOG
+    advanced_write = args.command == "mqtt" and not CATALOG[args.name]["readonly"]
+    if args.command in WRITE_COMMANDS or advanced_write:
         authorization = authorize(args, config)  # Gate before any file or network work.
+        if args.command in ("mkdir", "rmdir"):
+            return directory_operation(config, args, authorization)
+        if args.command == "delete":
+            return delete_file(config, args, authorization)
+        if args.command == "rename":
+            return rename_file(config, args, authorization)
         if args.command == "upload":
             return upload_file(config, args, authorization)
         section, body = build_payload(args)
@@ -160,13 +272,23 @@ def dispatch(config, args):
             section, body = build_payload(args, url=verified["url"])
         with status_connection(config, args) as connection:
             before = connection.query_status()
-            if args.command == "print" and before.get("print_state") not in (
+            if (
+                args.command == "print"
+                or body.get("command")
+                in (
+                    "project_file",
+                    "gcode_file",
+                    "calibration",
+                    "extrusion_cali",
+                    "flowrate_cali",
+                )
+            ) and before.get("print_state") not in (
                 "IDLE",
                 "FINISH",
                 "FAILED",
             ):
                 raise CliError("存在任务或状态未知，拒绝启动打印")
-            if args.command == "resume" and before.get("print_state") != "PAUSE":
+            if body.get("command") == "resume" and before.get("print_state") != "PAUSE":
                 raise CliError("仅 PAUSE 状态允许恢复")
             try:
                 return connection.command(body, authorization, section)
@@ -174,16 +296,51 @@ def dispatch(config, args):
                 after = connection.query_status()
                 if observed_success(args.command, body, before, after):
                     return {
-                        "command": body["command"],
+                        "command": body.get("command", "update.rename"),
                         "result": "verified_by_status",
                         "retried": False,
                     }
                 raise CliError(
                     "命令已发送，未收到 ACK；状态未能确认结果，未重试，请检查设备"
                 ) from None
-    if args.command in ("status", "hms"):
+    if args.command == "mqtt":
+        section, body = protocol_payload(args.name, args.params)
         with status_connection(config, args) as connection:
+            return connection.query(section, body)
+    if args.command in ("get-version", "info", "get-accessories"):
+        with status_connection(config, args) as connection:
+            return (
+                connection.query(
+                    "system", {"command": "get_accessories", "accessory_type": "none"}
+                )
+                if args.command == "get-accessories"
+                else connection.query("info", {"command": "get_version"})
+            )
+    if args.command == "file-info":
+        return file_info(config, args)
+    if args.command == "project-member":
+        from .files import save_download
+
+        with internal_connection(config, args) as tunnel:
+            return save_download(
+                args.destination, lambda sink: tunnel.project_member(args.member, sink)
+            )
+    if args.command == "camera-snapshot":
+        from .camera import snapshot
+
+        return snapshot(config, args)
+    if args.command == "download":
+        return download_file(config, args)
+    if args.command in ("status", "hms", "camera-status"):
+        with status_connection(config, args) as connection:
+            if getattr(args, "json", False):
+                raw = connection.query_status(raw=True)
+                return (
+                    raw if args.command == "status" else raw["print"].get("ipcam", {})
+                )
             status = connection.query_status()
+            if args.command == "camera-status":
+                return status["ipcam"]
             return status if args.command == "status" else {"errors": status["errors"]}
     if args.command == "ls":
         return list_files(config, args)
@@ -216,7 +373,9 @@ def main(argv=None):
         args = parser.parse_args(argv)
         if not 0 < args.timeout <= 60:
             raise CliError("timeout 必须在 0–60 秒之间")
-        if args.command == "config" and args.action == "init":
+        if args.command == "protocol-list":
+            result = CATALOG
+        elif args.command == "config" and args.action == "init":
             result = init_config(
                 args.config or Path.home() / ".config/bambu/config.yaml"
             )
@@ -229,7 +388,13 @@ def main(argv=None):
                 if args.command == "config"
                 else dispatch(config, args)
             )
-        print(redact({"time": now_cst(), "result": result}, config))
+        output = {"time": now_cst(), "result": result}
+        # This trusted, local schema contains type names, not device values.
+        print(
+            json.dumps(output, ensure_ascii=False)
+            if args.command == "protocol-list"
+            else redact(output, config)
+        )
         return 0
     except KeyboardInterrupt:
         print('{"error":"已中断；写入结果可能未知，勿自动重试"}', file=sys.stderr)

@@ -2,7 +2,15 @@
 # State fields adapted from bpm (WTFPL-2.0) and ha-bambulab (MIT).
 # Copyright (c) 2023 ha-bambulab contributors (MIT).
 # See THIRD_PARTY_NOTICES.md for pinned revisions and notices.
+import json
+from datetime import datetime, timedelta
+from importlib.resources import files
+from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
+
 from .hms import decode_errors
+
+STAGES = json.loads(files("bambu_lan_cli").joinpath("stages.json").read_text())
 
 
 def summarize_tray(tray):
@@ -61,6 +69,9 @@ def summarize_ams(ams):
                 "humidity_level": unit.get("humidity"),
                 "humidity_percent": unit.get("humidity_raw"),
                 "temperature_c": unit.get("temp"),
+                "drying": {
+                    k: v for k, v in unit.items() if k.startswith(("dry", "heat"))
+                },
                 "trays": [
                     summarize_tray(t)
                     for t in unit.get("tray", []) or []
@@ -75,12 +86,72 @@ def summarize_ams(ams):
     }
 
 
+def camera_status(state):
+    camera = state.get("ipcam") or {}
+    out = {k: v for k, v in camera.items() if k != "rtsp_url"}
+    # Do not forward a device-supplied URL: userinfo, tokens and query strings
+    # can contain credentials. Only report the transport and availability.
+    raw = camera.get("rtsp_url", "")
+    try:
+        scheme = urlsplit(raw).scheme
+    except ValueError:
+        scheme = ""
+    out["rtsp"] = {"available": scheme in ("rtsp", "rtsps"), "scheme": scheme or None}
+    out["storage"] = (state.get("device") or {}).get("cam")
+    return out
+
+
+def job_status(state, now=None):
+    now = now or datetime.now(ZoneInfo("Asia/Shanghai"))
+    remaining = state.get("mc_remaining_time", state.get("remain_time"))
+    eta = None
+    if state.get("gcode_state") in ("RUNNING", "PREPARE"):
+        try:
+            if 0 <= float(remaining) <= 525600:
+                eta = (
+                    (now + timedelta(minutes=float(remaining)))
+                    .astimezone(ZoneInfo("Asia/Shanghai"))
+                    .isoformat(timespec="seconds")
+                )
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return {
+        "name": state.get("subtask_name") or state.get("gcode_file"),
+        "progress_percent": state.get("mc_percent", state.get("percent")),
+        "current_layer": state.get("layer_num"),
+        "total_layers": state.get("total_layer_num"),
+        "remaining_minutes": remaining,
+        "estimated_finish_cst": eta,
+        "eta_note": "暂停或未打印时不推算完成时间" if eta is None else "按剩余分钟估计",
+        "stage": state.get("stg_cur", state.get("mc_print_stage")),
+        "stage_name": STAGES.get(
+            str(state.get("stg_cur", state.get("mc_print_stage"))), "unknown"
+        ),
+        "stage_history": state.get("stg"),
+        "mc_print_sub_stage": state.get("mc_print_sub_stage"),
+    }
+
+
 def summarize_status(config, state, version, count):
     device = state.get("device") or {}
     return {
         "mqtt": "ok",
         "model": config.model,
         "print_state": state.get("gcode_state"),
+        "job": job_status(state),
+        "ipcam": camera_status(state),
+        "xcam": state.get("xcam"),
+        "xcam_status": state.get("xcam_status"),
+        "storage": {
+            k: v for k, v in state.items() if k.startswith(("sdcard", "storage", "usb"))
+        },
+        "device": device,
+        "speed_name": {1: "silent", 2: "standard", 3: "sport", 4: "ludicrous"}.get(
+            int(state.get("spd_lvl") or 0)
+        )
+        if str(state.get("spd_lvl") or 0).isdigit()
+        else None,
+        "speed_percent": state.get("spd_mag"),
         "nozzle_temperature_c": state.get("nozzle_temper"),
         "nozzle_target_c": state.get("nozzle_target_temper"),
         "bed_temperature_c": state.get("bed_temper"),

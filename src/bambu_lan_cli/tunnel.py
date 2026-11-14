@@ -4,7 +4,7 @@
 Protocol reference: ClusterM/open-bamboo-networking (AGPL-3.0), commit
 77de55a8c696c53125ca297bdf3fdf1258772335, research/06.04-port-6000.md
 and src/tunnel_local.cpp, src/tunnel_upload.cpp. Independently written Python
-implementation, limited to authentication/setup and RPC command types 1, 5, 7.
+implementation, covering RPC command types 1–5 and 7.
 See LICENSE and THIRD_PARTY_NOTICES.md for license and attribution.
 """
 
@@ -130,7 +130,7 @@ class BambuTunnelLocal:
             raise TunnelError("TCP 6000 响应帧类型无效")
         return magic, self._read_exact(size)
 
-    def _json_receive(self):
+    def _packet_receive(self):
         for _ in range(64):
             magic, payload = self._receive()
             if magic == 0x0000013F:
@@ -138,13 +138,20 @@ class BambuTunnelLocal:
             if magic != self.CTRL_RX:
                 raise TunnelError("TCP 6000 非预期响应类型")
             try:
-                message = json.loads(payload)
+                text, _, binary = payload.partition(b"\n\n")
+                message = json.loads(text)
             except (ValueError, UnicodeError):
                 raise TunnelError("TCP 6000 JSON 响应无效") from None
             if not isinstance(message, dict):
                 raise TunnelError("TCP 6000 JSON 响应无效")
-            return message
+            return message, binary
         raise TunnelError("TCP 6000 非预期响应过多")
+
+    def _json_receive(self):
+        message, binary = self._packet_receive()
+        if binary:
+            raise TunnelError("TCP 6000 非预期二进制数据")
+        return message
 
     def _reply(self, command, sequence):
         for _ in range(128):
@@ -166,10 +173,12 @@ class BambuTunnelLocal:
         raise TunnelError("TCP 6000 未收到匹配的命令响应")
 
     def _request(self, command, request):
-        # Explicit allowlist: no delete, control, print, download or motion commands.
-        if command not in (1, 5, 7):
+        # No arbitrary RPCs; archive reads require explicit paths.
+        if command not in (1, 2, 3, 4, 5, 7) or (
+            command == 2 and not request.get("paths")
+        ):
             raise TunnelError("不允许的 TCP 6000 命令")
-        if command == 5:
+        if command in (3, 5):
             if self._authorization is None:
                 raise TunnelError("写入缺少授权")
             self._authorization.check(self.config)
@@ -193,8 +202,13 @@ class BambuTunnelLocal:
             raise TunnelError("REQUEST_MEDIA_ABILITY 响应结构无效")
         return reply
 
-    def list_models(self, storage="emmc", kind="model"):
-        if kind not in ("model", "timelapse"):
+    def list_models(self, storage=None, kind="model"):
+        storage = (
+            storage
+            if storage is not None
+            else ("emmc" if kind == "model" else "internal")
+        )
+        if kind not in ("model", "timelapse", "video"):
             raise TunnelError("不支持的列表类型")
         sequence, response = self._request(
             1, {"type": kind, "api_version": 2, "notify": "DETAIL", "storage": storage}
@@ -213,6 +227,137 @@ class BambuTunnelLocal:
                 return entries
             response = self._reply(1, sequence)
         raise TunnelError("LIST_INFO 响应数量超过上限")
+
+    def resolve_file(self, path, kind="timelapse"):
+        from .files import validate_path
+
+        matches = [
+            entry
+            for entry in self.list_models(kind=kind)
+            if entry.get("path") == path
+            or entry.get("name") == path
+            or str(entry.get("path", "")).rsplit("/", 1)[-1] == path
+        ]
+        if len(matches) != 1:
+            raise TunnelError("列表中未找到唯一匹配文件；请使用 ls 返回的 path")
+        entry = matches[0]
+        full = validate_path(entry.get("path"))
+        if not full.startswith(
+            ("/userdata/media/", "/userdata/model/", "/media/", "/sdcard/")
+        ):
+            raise TunnelError("列表返回了不支持的媒体路径")
+        return {**entry, "path": full}
+
+    def delete(self, path, kind, authorization):
+        authorization.check(self.config)
+        self._authorization = authorization
+        entry = self.resolve_file(path, kind)
+        _, response = self._request(3, {"paths": [entry["path"]]})
+        if response["result"] != 0:
+            raise TunnelError("FILE_DEL 被设备拒绝")
+        # A successful ACK is distinct from verified removal.
+        remaining = self.list_models(kind=kind)
+        if any(item.get("path") == entry["path"] for item in remaining):
+            raise TunnelError("FILE_DEL 应答成功，但文件仍在列表；未重试")
+        return {"deleted": True, "verified_by_listing": True}
+
+    def download(self, path, kind, sink, max_bytes):
+        entry = self.resolve_file(path, kind)
+        return self._stream_file(
+            4,
+            {"path": entry["path"], "offset": 0},
+            sink,
+            max_bytes,
+            expected_size=entry.get("size"),
+        )
+
+    def archive_member(self, path, member, sink, max_bytes, kind="model"):
+        from .files import validate_path
+
+        entry = self.resolve_file(path, kind)
+        validate_path("/" + member)
+        return self._stream_file(
+            2, {"paths": [entry["path"] + "#" + member]}, sink, max_bytes
+        )
+
+    def project_member(self, member, sink):
+        from .files import validate_path
+
+        validate_path("/" + member)
+        parameter = json.dumps(
+            {
+                "sequence_id": 1,
+                "version": 1,
+                "peer_host": "studio",
+                "command": "get_project_file",
+                "file_rel_path": member,
+            }
+        ).encode()
+        return self._stream_file(
+            4,
+            {"path": "mem:/16", "offset": 0, "mem_dl_param_size": len(parameter)},
+            sink,
+            8 * 1024 * 1024,
+            initial_binary=parameter,
+        )
+
+    def _stream_file(
+        self, command, request, sink, max_bytes, expected_size=None, initial_binary=b""
+    ):
+        if command not in (2, 4):
+            raise TunnelError("不允许的流读取命令")
+        if type(expected_size) is int and expected_size > max_bytes:
+            raise TunnelError("下载文件超过大小上限")
+        self.command_sequence += 1
+        sequence = self.command_sequence
+        self._send_json(
+            {"mtype": 12289, "cmdtype": command, "sequence": sequence, "req": request},
+            initial_binary,
+        )
+        digest = hashlib.md5()
+        size = 0
+        for _ in range(100000):
+            reply, binary = self._packet_receive()
+            if reply.get("cmdtype") != command or reply.get("sequence") != sequence:
+                continue
+            if type(reply.get("result")) is not int or reply["result"] not in (0, 1):
+                raise TunnelError("下载被设备拒绝；该固件可能禁止内部模型读取")
+            info = reply.get("reply", {})
+            if info.get("mem_dl_param_size"):
+                length = info["mem_dl_param_size"]
+                if type(length) is not int or not 0 < length <= len(binary):
+                    raise TunnelError("内存文件头长度无效")
+                try:
+                    header = json.loads(binary[:length])
+                except (ValueError, UnicodeError):
+                    raise TunnelError("内存文件头无效") from None
+                if header.get("err_no") != 0:
+                    raise TunnelError("内存文件成员被拒绝")
+                binary = binary[length:]
+                # size/offset in this frame include the memory header.
+                info = {k: v for k, v in info.items() if k not in ("size", "offset")}
+            if info.get("offset", size) != size or (
+                "size" in info and info["size"] != len(binary)
+            ):
+                raise TunnelError("下载分块偏移或长度不匹配")
+            size += len(binary)
+            if size > max_bytes:
+                raise TunnelError("下载超过大小上限")
+            sink(binary)
+            digest.update(binary)
+            if reply["result"] == 0:
+                if "total" in info and info["total"] != size:
+                    raise TunnelError("下载总长度不匹配")
+                checksum = info.get("file_md5")
+                if command == 4 and (
+                    not isinstance(checksum, str)
+                    or digest.hexdigest() != checksum.lower()
+                ):
+                    raise TunnelError("下载 MD5 校验失败或缺失")
+                if type(expected_size) is int and expected_size != size:
+                    raise TunnelError("下载大小与列表不一致")
+                return {"bytes": size, "md5_verified": bool(checksum)}
+        raise TunnelError("下载分块数量超限")
 
     def upload(self, source, name, authorization):
         authorization.check(self.config)

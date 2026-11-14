@@ -37,6 +37,18 @@ class ImplicitFTPS(ftplib.FTP_TLS):
                 raise
         return conn, size
 
+    def retrbinary(self, cmd, callback, blocksize=8192, rest=None):
+        # P1/P2 firmware can stall on FTP_TLS.retrbinary's TLS unwrap. Match
+        # the upstream FTPS dialect and our existing LIST close behaviour.
+        self.voidcmd("TYPE I")
+        with self.transfercmd(cmd, rest) as conn:
+            while True:
+                chunk = conn.recv(blocksize)
+                if not chunk:
+                    break
+                callback(chunk)
+        return self.voidresp()
+
     def root_list(self, path="/"):
         self.voidcmd("TYPE A")
         contents = bytearray()

@@ -10,6 +10,23 @@ from bambu_lan_cli.errors import AckTimeout, CliError
 from bambu_lan_cli.safety import redact
 
 CASES = [
+    ["mkdir", "/sample"],
+    ["rmdir", "/sample"],
+    ["camera-record", "disable"],
+    ["camera-timelapse", "enable"],
+    ["camera-resolution", "1080p"],
+    ["camera-capture", "disable"],
+    ["camera-delete-oldest", "--storage", "internal", "--total-layer", "50"],
+    ["xcam", "spaghetti_detector", "enable", "--sensitivity", "high"],
+    ["print-option", "sound_enable", "disable"],
+    ["calibration", "--option", "15"],
+    ["nozzle", "--diameter", "0.4"],
+    ["chamber", "40"],
+    ["door", "1"],
+    ["ams-settings"],
+    ["select-tool", "1"],
+    ["delete", "/timelapse/sample.mp4"],
+    ["rename", "/sample.gcode.3mf", "/renamed.gcode.3mf"],
     ["print", "sample.gcode.3mf"],
     ["upload", "sample.gcode.3mf"],
     ["pause"],
@@ -71,11 +88,14 @@ def test_all_write_gates(case, flags, config, monkeypatch):
     network.assert_not_called()
 
 
-@pytest.mark.parametrize("case", [c for c in CASES if c[0] != "upload"])
+@pytest.mark.parametrize(
+    "case",
+    [c for c in CASES if c[0] not in ("upload", "delete", "rename", "mkdir", "rmdir")],
+)
 def test_payloads(case):
     args = build_parser().parse_args(case)
     section, body = build_payload(args)
-    assert section in ("print", "system") and "param" in body and "command" in body
+    assert section in ("print", "system", "camera", "xcam") and "command" in body
 
 
 @pytest.mark.parametrize(

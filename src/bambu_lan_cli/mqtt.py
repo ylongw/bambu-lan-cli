@@ -11,6 +11,7 @@ import paho.mqtt.client as mqtt
 
 from .common import merge_dict, now_cst, tls_context
 from .errors import AckTimeout, CliError
+from .protocol import readonly_payload
 from .relay import SshTunnel
 from .state import summarize_status
 
@@ -108,10 +109,7 @@ class MqttConnection:
         self.client.disconnect()
 
     def publish(self, payload, *, qos=0, authorization=None):
-        readonly = len(payload) == 1 and any(
-            section in payload and payload[section].get("command") == command
-            for section, command in (("pushing", "pushall"), ("info", "get_version"))
-        )
+        readonly = readonly_payload(payload)
         if not readonly:
             if authorization is None:
                 raise CliError("写操作缺少授权")
@@ -131,7 +129,7 @@ class MqttConnection:
             stage = "PUBACK" if qos else "发送完成"
             raise CliError(f"MQTT 等待 {stage} 超时；不自动重发")
 
-    def query_status(self):
+    def query_status(self, *, raw=False):
         # 只读查询使用 QoS 0；以 report 状态/版本响应验证应用层成功。
         self.publish(
             {"pushing": {"command": "pushall", "sequence_id": next_sequence()}}, qos=0
@@ -149,14 +147,42 @@ class MqttConnection:
             raise CliError(
                 "MQTT 已认证并订阅，但未收到打印状态；检查序列号和开发者模式"
             )
+        if raw:
+            return {"print": self.status, "info": self.version}
         return summarize_status(
             self.config, self.status, self.version, self.report_count
         )
 
+    def query(self, section, body):
+        sequence = next_sequence()
+        body = {**body, "sequence_id": sequence}
+        self.publish({section: body}, qos=0)
+        deadline = time.monotonic() + self.timeout
+        while time.monotonic() < deadline:
+            for report in self.reports:
+                reply = report.get(section, {})
+                if (
+                    isinstance(reply, dict)
+                    and reply.get("command") == body["command"]
+                    and str(reply.get("sequence_id")) == sequence
+                ):
+                    if "result" in reply and str(reply["result"]).upper() not in (
+                        "SUCCESS",
+                        "0",
+                    ):
+                        raise CliError("打印机拒绝只读查询")
+                    return reply
+            self.poll()
+        raise CliError("只读查询未收到匹配响应")
+
     def command(self, body, authorization, section="print"):
         authorization.check(self.config)
         sequence_id = next_sequence()
-        body = {"param": "", **body, "sequence_id": sequence_id}
+        body = {
+            **({"param": ""} if section == "print" else {}),
+            **body,
+            "sequence_id": sequence_id,
+        }
         self.publish({section: body}, qos=0, authorization=authorization)
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
@@ -164,15 +190,15 @@ class MqttConnection:
                 reply = payload.get(section, {})
                 if (
                     isinstance(reply, dict)
-                    and reply.get("command") == body["command"]
+                    and reply.get("command") == body.get("command")
                     and str(reply.get("sequence_id")) == sequence_id
                     and "result" in reply
                 ):
-                    if reply["result"] != "SUCCESS":
+                    if str(reply["result"]).upper() not in ("SUCCESS", "0"):
                         raise CliError("打印机拒绝命令；未自动重试，请检查打印机屏幕")
                     return {
                         "time_cst": now_cst(),
-                        "command": body["command"],
+                        "command": body.get("command", "update.rename"),
                         "result": "SUCCESS",
                     }
             self.poll()

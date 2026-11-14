@@ -69,3 +69,12 @@ https://github.com/ClusterM/open-bamboo-networking
 AGPL-3.0-or-later；TCP 6000 帧、认证、LIST_INFO、能力与流水分块上传协议，Python 实现改编自本地已验证实现。
 
 TCP 6000 参考 `research/06.04-port-6000.md`、`src/tunnel_local.cpp`、`src/tunnel_upload.cpp`；完整 AGPL 文本见根目录 LICENSE。
+
+
+## 本轮协议扩展
+
+以上三个上游的固定版本保持不变。新增 `protocol_catalog.json` 的 MQTT 字段形状、`camera.py` 的 LAN 相机帧和 `tunnel.py` 的下载/删除/SUB_FILE 参照相同上游；`stages.json` 的阶段名称来自 ha-bambulab `pybambu/const.py` 的 CURRENT_STAGE_IDS，适用上面的完整 MIT 声明。
+
+另核对 [Doridian/OpenBambuAPI](https://github.com/Doridian/OpenBambuAPI)，固定 commit `cc383a2c96576a9f53391c879acfb8dca5c534e4`，主要为 `mqtt.md`、`video.md`、`ftp.md`。该文档以 GFDL-1.3 发布；本项目只独立记录协议事实与来源链接，不复制该文档的文字或代码，不将其许可证改为本项目许可证。其 `lan-file-tunnel.md` 的认证/帧头描述与已有真机验证的 OBN 实现存在冲突，本实现继续采用 OBN。详细来源链接见 [PROTOCOL_COVERAGE.md](docs/PROTOCOL_COVERAGE.md)。
+
+可选 PyAV/Pillow 通过独立可选依赖安装，不内嵌第三方二进制。CLI 只在内存中向 PyAV 提供认证 URL，不打印 URL、解码器错误或日志。

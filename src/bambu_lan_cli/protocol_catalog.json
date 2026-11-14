@@ -1,0 +1,1661 @@
+{
+  "camera.ipcam_cap_pic_set": {
+    "section": "camera",
+    "command": "ipcam_cap_pic_set",
+    "fields": {
+      "control": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "control"
+    ]
+  },
+  "camera.ipcam_delete_oldest_timelapse": {
+    "section": "camera",
+    "command": "ipcam_delete_oldest_timelapse",
+    "fields": {
+      "storage": [
+        "str"
+      ],
+      "total_layer": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "storage",
+      "total_layer"
+    ]
+  },
+  "camera.ipcam_get_media_info": {
+    "section": "camera",
+    "command": "ipcam_get_media_info",
+    "fields": {
+      "sub_command": [
+        "str"
+      ],
+      "storage": [
+        "str"
+      ],
+      "total_layer": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": [
+      "sub_command",
+      "storage",
+      "total_layer"
+    ]
+  },
+  "camera.ipcam_record_set": {
+    "section": "camera",
+    "command": "ipcam_record_set",
+    "fields": {
+      "control": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "control"
+    ]
+  },
+  "camera.ipcam_resolution_set": {
+    "section": "camera",
+    "command": "ipcam_resolution_set",
+    "fields": {
+      "resolution": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "resolution"
+    ]
+  },
+  "camera.ipcam_timelapse": {
+    "section": "camera",
+    "command": "ipcam_timelapse",
+    "fields": {
+      "control": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.11-camera.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "control"
+    ]
+  },
+  "info.get_version": {
+    "section": "info",
+    "command": "get_version",
+    "fields": {},
+    "sources": [
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "print.ams_change_filament": {
+    "section": "print",
+    "command": "ams_change_filament",
+    "fields": {
+      "curr_temp": [
+        "int"
+      ],
+      "tar_temp": [
+        "int"
+      ],
+      "ams_id": [
+        "int"
+      ],
+      "target": [
+        "int"
+      ],
+      "slot_id": [
+        "int"
+      ],
+      "extruder_id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.ams_control": {
+    "section": "print",
+    "command": "ams_control",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.ams_filament_drying": {
+    "section": "print",
+    "command": "ams_filament_drying",
+    "fields": {
+      "ams_id": [
+        "int"
+      ],
+      "mode": [
+        "int"
+      ],
+      "filament": [
+        "str"
+      ],
+      "temp": [
+        "int"
+      ],
+      "duration": [
+        "int"
+      ],
+      "humidity": [
+        "int"
+      ],
+      "rotate_tray": [
+        "bool"
+      ],
+      "cooling_temp": [
+        "int"
+      ],
+      "close_power_conflict": [
+        "bool"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "ams_id",
+      "close_power_conflict",
+      "cooling_temp",
+      "duration",
+      "filament",
+      "humidity",
+      "mode",
+      "rotate_tray",
+      "temp"
+    ]
+  },
+  "print.ams_filament_setting": {
+    "section": "print",
+    "command": "ams_filament_setting",
+    "fields": {
+      "ams_id": [
+        "int"
+      ],
+      "slot_id": [
+        "int"
+      ],
+      "tray_id": [
+        "int"
+      ],
+      "tray_info_idx": [
+        "str"
+      ],
+      "setting_id": [
+        "str"
+      ],
+      "tray_color": [
+        "str"
+      ],
+      "nozzle_temp_min": [
+        "int"
+      ],
+      "nozzle_temp_max": [
+        "int"
+      ],
+      "tray_type": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.ams_get_rfid": {
+    "section": "print",
+    "command": "ams_get_rfid",
+    "fields": {
+      "ams_id": [
+        "int"
+      ],
+      "slot_id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "ams_id",
+      "slot_id"
+    ]
+  },
+  "print.ams_reset": {
+    "section": "print",
+    "command": "ams_reset",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.07-ams-filament.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.ams_user_setting": {
+    "section": "print",
+    "command": "ams_user_setting",
+    "fields": {
+      "ams_id": [
+        "int"
+      ],
+      "startup_read_option": [
+        "bool"
+      ],
+      "tray_read_option": [
+        "bool"
+      ],
+      "calibrate_remain_flag": [
+        "bool"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "ams_id",
+      "calibrate_remain_flag",
+      "startup_read_option",
+      "tray_read_option"
+    ]
+  },
+  "print.auto_stop_ams_dry": {
+    "section": "print",
+    "command": "auto_stop_ams_dry",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.07-ams-filament.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.back_to_center": {
+    "section": "print",
+    "command": "back_to_center",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.06-axis.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.buzzer_ctrl": {
+    "section": "print",
+    "command": "buzzer_ctrl",
+    "fields": {
+      "mode": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "mode"
+    ]
+  },
+  "print.calibration": {
+    "section": "print",
+    "command": "calibration",
+    "fields": {
+      "option": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.10-print-options-calib.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "option"
+    ]
+  },
+  "print.clean_print_error": {
+    "section": "print",
+    "command": "clean_print_error",
+    "fields": {
+      "subtask_id": [
+        "str"
+      ],
+      "print_error": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "print_error",
+      "subtask_id"
+    ]
+  },
+  "print.close_air_filt": {
+    "section": "print",
+    "command": "close_air_filt",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.03-print-job.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.extrusion_cali": {
+    "section": "print",
+    "command": "extrusion_cali",
+    "fields": {
+      "tray_id": [
+        "int"
+      ],
+      "nozzle_temp": [
+        "int"
+      ],
+      "bed_temp": [
+        "int"
+      ],
+      "max_volumetric_speed": [
+        "float",
+        "int"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "mode": [
+        "int"
+      ],
+      "filaments": [
+        "list"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.extrusion_cali_del": {
+    "section": "print",
+    "command": "extrusion_cali_del",
+    "fields": {
+      "extruder_id": [
+        "int"
+      ],
+      "nozzle_id": [
+        "str"
+      ],
+      "filament_id": [
+        "str"
+      ],
+      "cali_idx": [
+        "int"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "nozzle_pos": [
+        "int"
+      ],
+      "nozzle_sn": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "cali_idx",
+      "filament_id",
+      "nozzle_diameter"
+    ]
+  },
+  "print.extrusion_cali_get": {
+    "section": "print",
+    "command": "extrusion_cali_get",
+    "fields": {
+      "filament_id": [
+        "str"
+      ],
+      "extruder_id": [
+        "int"
+      ],
+      "nozzle_id": [
+        "str"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "nozzle_pos": [
+        "int"
+      ],
+      "nozzle_sn": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "print.extrusion_cali_get_result": {
+    "section": "print",
+    "command": "extrusion_cali_get_result",
+    "fields": {
+      "nozzle_diameter": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "print.extrusion_cali_sel": {
+    "section": "print",
+    "command": "extrusion_cali_sel",
+    "fields": {
+      "tray_id": [
+        "int"
+      ],
+      "ams_id": [
+        "int"
+      ],
+      "slot_id": [
+        "int"
+      ],
+      "cali_idx": [
+        "int"
+      ],
+      "filament_id": [
+        "str"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "nozzle_pos": [
+        "int"
+      ],
+      "nozzle_sn": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.extrusion_cali_set": {
+    "section": "print",
+    "command": "extrusion_cali_set",
+    "fields": {
+      "tray_id": [
+        "int"
+      ],
+      "k_value": [
+        "float"
+      ],
+      "n_coef": [
+        "float"
+      ],
+      "bed_temp": [
+        "int"
+      ],
+      "nozzle_temp": [
+        "int"
+      ],
+      "max_volumetric_speed": [
+        "float"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "filaments": [
+        "list"
+      ],
+      "slot_id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.08-pa-calibration.md",
+      "BPM:src/bpm/bambucommands.py",
+      "BPM:src/bpm/bambuprinter.py#set_spool_k_factor"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.flowrate_cali": {
+    "section": "print",
+    "command": "flowrate_cali",
+    "fields": {
+      "tray_id": [
+        "int"
+      ],
+      "nozzle_diameter": [
+        "str"
+      ],
+      "filaments": [
+        "list"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.09-flow-calibration.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.flowrate_get_result": {
+    "section": "print",
+    "command": "flowrate_get_result",
+    "fields": {
+      "nozzle_diameter": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.09-flow-calibration.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "print.gcode_file": {
+    "section": "print",
+    "command": "gcode_file",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.10-print-options-calib.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.gcode_line": {
+    "section": "print",
+    "command": "gcode_line",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.15-gcode-line.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.get_auto_nozzle_mapping": {
+    "section": "print",
+    "command": "get_auto_nozzle_mapping",
+    "fields": {
+      "group_info": [
+        "list"
+      ],
+      "version": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.14-nozzle-rack.md"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": [
+      "group_info",
+      "version"
+    ]
+  },
+  "print.holder_nozzle_refresh": {
+    "section": "print",
+    "command": "holder_nozzle_refresh",
+    "fields": {
+      "id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.14-nozzle-rack.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "id"
+    ]
+  },
+  "print.idle_ignore": {
+    "section": "print",
+    "command": "idle_ignore",
+    "fields": {
+      "err": [
+        "str"
+      ],
+      "type": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "err",
+      "type"
+    ]
+  },
+  "print.ignore": {
+    "section": "print",
+    "command": "ignore",
+    "fields": {
+      "err": [
+        "str"
+      ],
+      "param": [
+        "str"
+      ],
+      "job_id": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "err",
+      "job_id",
+      "param"
+    ]
+  },
+  "print.manual_ams_bind": {
+    "section": "print",
+    "command": "manual_ams_bind",
+    "fields": {
+      "bind_list": [
+        "list"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "bind_list"
+    ]
+  },
+  "print.nozzle_holder_ctrl": {
+    "section": "print",
+    "command": "nozzle_holder_ctrl",
+    "fields": {
+      "action": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.14-nozzle-rack.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "action"
+    ]
+  },
+  "print.nozzle_info_confirm": {
+    "section": "print",
+    "command": "nozzle_info_confirm",
+    "fields": {
+      "id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.14-nozzle-rack.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "id"
+    ]
+  },
+  "print.pause": {
+    "section": "print",
+    "command": "pause",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.print_option": {
+    "section": "print",
+    "command": "print_option",
+    "fields": {
+      "auto_switch_filament": [
+        "bool"
+      ],
+      "air_print_detect": [
+        "bool"
+      ],
+      "option": [
+        "int"
+      ],
+      "auto_recovery": [
+        "bool"
+      ],
+      "sound_enable": [
+        "bool"
+      ],
+      "nozzle_blob_detect": [
+        "bool"
+      ],
+      "filament_tangle_detect": [
+        "bool"
+      ],
+      "air_purification": [
+        "int"
+      ],
+      "nozzle_blob_detect_v2": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.07-ams-filament.md",
+      "OBN:research/12.10-print-options-calib.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.print_speed": {
+    "section": "print",
+    "command": "print_speed",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.project_file": {
+    "section": "print",
+    "command": "project_file",
+    "fields": {
+      "use_ams": [
+        "bool"
+      ],
+      "ams_mapping": [
+        "str",
+        "list"
+      ],
+      "bed_type": [
+        "str"
+      ],
+      "url": [
+        "str"
+      ],
+      "file": [
+        "str"
+      ],
+      "param": [
+        "str"
+      ],
+      "md5": [
+        "str"
+      ],
+      "profile_id": [
+        "str"
+      ],
+      "project_id": [
+        "str"
+      ],
+      "subtask_id": [
+        "str"
+      ],
+      "subtask_name": [
+        "str"
+      ],
+      "task_id": [
+        "str"
+      ],
+      "timelapse": [
+        "bool"
+      ],
+      "bed_leveling": [
+        "bool"
+      ],
+      "flow_cali": [
+        "bool"
+      ],
+      "layer_inspect": [
+        "bool"
+      ],
+      "vibration_cali": [
+        "bool"
+      ],
+      "url_enc": [
+        "str"
+      ],
+      "ams_mapping2": [
+        "list"
+      ],
+      "auto_bed_leveling": [
+        "int"
+      ],
+      "cfg": [
+        "str"
+      ],
+      "extrude_cali_flag": [
+        "int"
+      ],
+      "extrude_cali_manual_mode": [
+        "int"
+      ],
+      "nozzle_offset_cali": [
+        "int"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py",
+      "OBN:research/08.08-print-abi.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.refresh_nozzle": {
+    "section": "print",
+    "command": "refresh_nozzle",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md",
+      "OBN:research/12.14-nozzle-rack.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.resume": {
+    "section": "print",
+    "command": "resume",
+    "fields": {
+      "param": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "param"
+    ]
+  },
+  "print.select_extruder": {
+    "section": "print",
+    "command": "select_extruder",
+    "fields": {
+      "extruder_index": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "extruder_index"
+    ]
+  },
+  "print.set_against_continued_heating_mode": {
+    "section": "print",
+    "command": "set_against_continued_heating_mode",
+    "fields": {
+      "enable": [
+        "bool"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "enable"
+    ]
+  },
+  "print.set_airduct": {
+    "section": "print",
+    "command": "set_airduct",
+    "fields": {
+      "modeId": [
+        "int"
+      ],
+      "submode": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.05-fans.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "modeId",
+      "submode"
+    ]
+  },
+  "print.set_bed_temp": {
+    "section": "print",
+    "command": "set_bed_temp",
+    "fields": {
+      "temp": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "temp"
+    ]
+  },
+  "print.set_ctt": {
+    "section": "print",
+    "command": "set_ctt",
+    "fields": {
+      "ctt_val": [
+        "int"
+      ],
+      "temper_check": [
+        "bool"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "ctt_val",
+      "temper_check"
+    ]
+  },
+  "print.set_extrusion_length": {
+    "section": "print",
+    "command": "set_extrusion_length",
+    "fields": {
+      "extruder_index": [
+        "int"
+      ],
+      "length": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "extruder_index",
+      "length"
+    ]
+  },
+  "print.set_fan": {
+    "section": "print",
+    "command": "set_fan",
+    "fields": {
+      "fan_index": [
+        "int"
+      ],
+      "speed": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.05-fans.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "fan_index",
+      "speed"
+    ]
+  },
+  "print.set_nozzle": {
+    "section": "print",
+    "command": "set_nozzle",
+    "fields": {
+      "diameter": [
+        "float"
+      ],
+      "id": [
+        "int"
+      ],
+      "type": [
+        "str"
+      ],
+      "wear": [
+        "int"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "diameter",
+      "id",
+      "type",
+      "wear"
+    ]
+  },
+  "print.set_nozzle_temp": {
+    "section": "print",
+    "command": "set_nozzle_temp",
+    "fields": {
+      "extruder_index": [
+        "int"
+      ],
+      "target_temp": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.04-temps-extruder.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "extruder_index",
+      "target_temp"
+    ]
+  },
+  "print.skip_objects": {
+    "section": "print",
+    "command": "skip_objects",
+    "fields": {
+      "obj_list": [
+        "list"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "obj_list"
+    ]
+  },
+  "print.stop": {
+    "section": "print",
+    "command": "stop",
+    "fields": {
+      "param": [
+        "str"
+      ],
+      "job_id": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.03-print-job.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.unload_filament": {
+    "section": "print",
+    "command": "unload_filament",
+    "fields": {},
+    "sources": [
+      "OBA:mqtt.md#printunload_filament"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "print.xyz_ctrl": {
+    "section": "print",
+    "command": "xyz_ctrl",
+    "fields": {
+      "axis": [
+        "str"
+      ],
+      "dir": [
+        "int"
+      ],
+      "mode": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.06-axis.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "axis",
+      "dir",
+      "mode"
+    ]
+  },
+  "pushing.pushall": {
+    "section": "pushing",
+    "command": "pushall",
+    "fields": {
+      "push_target": [
+        "int"
+      ],
+      "version": [
+        "int"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "pushing.start": {
+    "section": "pushing",
+    "command": "start",
+    "fields": {},
+    "sources": [
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": []
+  },
+  "system.get_access_code": {
+    "section": "system",
+    "command": "get_access_code",
+    "fields": {},
+    "sources": [
+      "OBN:research/12.02-system.md"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "system.get_accessories": {
+    "section": "system",
+    "command": "get_accessories",
+    "fields": {
+      "accessory_type": [
+        "str"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "system.ledctrl": {
+    "section": "system",
+    "command": "ledctrl",
+    "fields": {
+      "led_node": [
+        "str"
+      ],
+      "led_mode": [
+        "str"
+      ],
+      "led_on_time": [
+        "int"
+      ],
+      "led_off_time": [
+        "int"
+      ],
+      "loop_times": [
+        "int"
+      ],
+      "interval_time": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.02-system.md",
+      "BPM:src/bpm/bambucommands.py",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "interval_time",
+      "led_mode",
+      "led_node",
+      "led_off_time",
+      "led_on_time",
+      "loop_times"
+    ]
+  },
+  "system.print_cache_set": {
+    "section": "system",
+    "command": "print_cache_set",
+    "fields": {
+      "config": [
+        "bool"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.02-system.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "config"
+    ]
+  },
+  "system.set_accessories": {
+    "section": "system",
+    "command": "set_accessories",
+    "fields": {
+      "accessory_type": [
+        "str"
+      ],
+      "nozzle_diameter": [
+        "float"
+      ],
+      "nozzle_type": [
+        "str"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "accessory_type",
+      "nozzle_diameter",
+      "nozzle_type"
+    ]
+  },
+  "system.set_door_stat": {
+    "section": "system",
+    "command": "set_door_stat",
+    "fields": {
+      "config": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.02-system.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "config"
+    ]
+  },
+  "system.uiop": {
+    "section": "system",
+    "command": "uiop",
+    "fields": {
+      "name": [
+        "str"
+      ],
+      "action": [
+        "str"
+      ],
+      "source": [
+        "int"
+      ],
+      "type": [
+        "str"
+      ],
+      "err": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.02-system.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "action",
+      "err",
+      "name",
+      "source",
+      "type"
+    ]
+  },
+  "update.rename": {
+    "section": "update",
+    "command": null,
+    "fields": {
+      "name": [
+        "str"
+      ]
+    },
+    "sources": [
+      "BPM:src/bpm/bambucommands.py#RENAME_PRINTER"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "name"
+    ]
+  },
+  "upgrade.consistency_confirm": {
+    "section": "upgrade",
+    "command": "consistency_confirm",
+    "fields": {
+      "src_id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.13-upgrade.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "src_id"
+    ]
+  },
+  "upgrade.get_history": {
+    "section": "upgrade",
+    "command": "get_history",
+    "fields": {},
+    "sources": [
+      "OBA:mqtt.md#upgradeget_history"
+    ],
+    "experimental": true,
+    "readonly": true,
+    "required": []
+  },
+  "upgrade.mc_for_ams_firmware_upgrade": {
+    "section": "upgrade",
+    "command": "mc_for_ams_firmware_upgrade",
+    "fields": {
+      "src_id": [
+        "int"
+      ],
+      "id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.13-upgrade.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "id",
+      "src_id"
+    ]
+  },
+  "upgrade.start": {
+    "section": "upgrade",
+    "command": "start",
+    "fields": {
+      "src_id": [
+        "int"
+      ],
+      "url": [
+        "str"
+      ],
+      "module": [
+        "str"
+      ],
+      "version": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBA:mqtt.md#upgradestart"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "module",
+      "src_id",
+      "url",
+      "version"
+    ]
+  },
+  "upgrade.upgrade_confirm": {
+    "section": "upgrade",
+    "command": "upgrade_confirm",
+    "fields": {
+      "src_id": [
+        "int"
+      ],
+      "module": [
+        "str"
+      ],
+      "upgrade_type": [
+        "int"
+      ],
+      "url": [
+        "str"
+      ],
+      "version": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.13-upgrade.md",
+      "HA:custom_components/bambu_lab/pybambu/commands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "src_id"
+    ]
+  },
+  "upgrade.wtm_upgrade": {
+    "section": "upgrade",
+    "command": "wtm_upgrade",
+    "fields": {
+      "module": [
+        "str"
+      ],
+      "src_id": [
+        "int"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.13-upgrade.md"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "module",
+      "src_id"
+    ]
+  },
+  "xcam.xcam_control_set": {
+    "section": "xcam",
+    "command": "xcam_control_set",
+    "fields": {
+      "module_name": [
+        "str"
+      ],
+      "control": [
+        "bool"
+      ],
+      "enable": [
+        "bool"
+      ],
+      "print_halt": [
+        "bool"
+      ],
+      "halt_print_sensitivity": [
+        "str"
+      ]
+    },
+    "sources": [
+      "OBN:research/12.12-xcam.md",
+      "BPM:src/bpm/bambucommands.py"
+    ],
+    "experimental": true,
+    "readonly": false,
+    "required": [
+      "module_name",
+      "control",
+      "enable",
+      "print_halt"
+    ]
+  }
+}
