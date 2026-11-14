@@ -1,0 +1,6 @@
+# Placeholder only. Create a private mode-0600 configuration outside Git.
+host: 192.168.1.100
+serial: 01P00A000000000
+access_code: "00000000"
+ssh_via: my-nas
+model: p2s
