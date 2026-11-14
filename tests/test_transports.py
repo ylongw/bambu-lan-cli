@@ -345,6 +345,7 @@ def test_remote_ftps_worker_executes_in_memory(config, monkeypatch, capsys):
                     module.tls_context,
                     module.ImplicitFTPS,
                     module.open_ftps,
+                    module.list_external,
                     module.validate_path,
                     module.ftps_operation,
                     module.remote_worker,
@@ -361,7 +362,7 @@ def test_remote_ftps_worker_executes_in_memory(config, monkeypatch, capsys):
     def connect(*args):
         yield ftp
 
-    namespace["open_ftps"] = connect
+    namespace["open_ftps"] = lambda *args: ftp
     values = json.dumps(
         dict(
             host=config.host,

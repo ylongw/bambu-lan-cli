@@ -324,13 +324,17 @@ def build_payload(a, *, url=None):
             body.update(
                 command="ams_filament_drying",
                 ams_id=ams_id,
-                temp=integer(a.temperature, 45, 65) if a.action == "start" else 0,
-                cooling_temp=integer(a.cooling_temp, 45, 65),
-                duration=integer(a.duration, 1, 24) if a.action == "start" else 0,
+                temp=integer(a.temperature, 1, 300)
+                if a.action == "start" and a.temperature is not None
+                else (None if a.action == "start" else 0),
+                cooling_temp=integer(a.cooling_temp, 1, 300),
+                duration=integer(a.duration, 1, 999)
+                if a.action == "start" and a.duration is not None
+                else (None if a.action == "start" else 0),
                 humidity=0,
                 mode=1 if a.action == "start" else 0,
                 rotate_tray=a.rotate_tray,
-                filament=a.filament,
+                filament=a.filament if a.action == "start" else "",
                 close_power_conflict=a.close_power_conflict,
             )
         else:

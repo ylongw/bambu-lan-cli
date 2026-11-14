@@ -56,9 +56,13 @@ def protocol_payload(name, params):
         if key in body and not low <= body[key] <= high:
             raise CliError("协议数值超出安全范围")
     if name == "print.ams_filament_drying":
+        if body.get("mode") not in (0, 1):
+            raise CliError(
+                "mode=2 仅确认实验性 OnHumidity 枚举，完整请求未确认；拒绝发送"
+            )
         if body.get("mode") == 1 and (
-            not 45 <= body.get("temp", 0) <= 65
-            or not 1 <= body.get("duration", 0) <= 24
+            not 1 <= body.get("temp", 0) <= 300
+            or not 1 <= body.get("duration", 0) <= 999
         ):
             raise CliError("烘干温度或时长超出安全范围")
     if (
@@ -95,7 +99,7 @@ def validate_values(value, key=""):
         "bed_temp": (0, 110),
         "ctt_val": (0, 60),
         "total_layer": (1, 100000),
-        "cooling_temp": (45, 65),
+        "cooling_temp": (1, 300),
     }
     if key in bounds:
         try:

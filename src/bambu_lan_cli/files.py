@@ -11,10 +11,10 @@ from pathlib import Path
 from .common import tls_context
 from .config import validate_via
 from .errors import CliError
-from .ftps import ImplicitFTPS, open_ftps
+from .ftps import ImplicitFTPS, list_external, open_ftps
 from .relay import SshTunnel, ssh_arguments
 from .safety import Authorization, remote_filename
-from .tunnel import BambuTunnelLocal, find_verified_model
+from .tunnel import BambuTunnelLocal, TunnelError, find_verified_model
 
 
 def validate_path(path):
@@ -28,7 +28,9 @@ def validate_path(path):
     return "/" + "/".join(part for part in path.split("/") if part and part != ".")
 
 
-def ftps_operation(config, timeout, operation, path, data=None, authorization=None):
+def ftps_operation(
+    config, timeout, operation, path, data=None, authorization=None, list_timeout=30
+):
     if operation not in ("ls", "download", "file-info"):
         if (
             operation not in ("upload", "delete", "rename", "mkdir", "rmdir")
@@ -37,9 +39,9 @@ def ftps_operation(config, timeout, operation, path, data=None, authorization=No
             raise CliError("FTPS 写操作缺少授权")
         authorization.check(config)
     path = validate_path(path)
+    if operation == "ls":
+        return list_external(config, timeout, path, list_timeout)
     with open_ftps(config, timeout) as ftp:
-        if operation == "ls":
-            return {"ftps": "ok", "entries": ftp.root_list(path)}
         if operation == "file-info":
             ftp.voidcmd("TYPE I")
             return {"size": ftp.size(path)}
@@ -108,7 +110,7 @@ def remote_worker():
     from types import SimpleNamespace
 
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    signal.alarm(180)
+    signal.alarm(300)
     length = int(sys.stdin.buffer.readline())
     if not 0 < length <= 65536:
         raise ValueError
@@ -134,8 +136,15 @@ def remote_worker():
             values["path"],
             data,
             Authorization(values.get("execute", False), values.get("confirm_serial")),
+            values.get("list_timeout", 30),
         )
         reply = {"ok": True, "result": result}
+    except CliError as exc:
+        reply = (
+            {"ok": False, "list_error": str(exc)}
+            if values["operation"] == "ls"
+            else {"ok": False}
+        )
     except Exception:
         reply = {"ok": False}
     encoded = json.dumps(reply)
@@ -170,6 +179,7 @@ def ssh_ftps(config, args, operation, path, data=None, authorization=None):
                     tls_context,
                     ImplicitFTPS,
                     open_ftps,
+                    list_external,
                     validate_path,
                     ftps_operation,
                     remote_worker,
@@ -178,7 +188,7 @@ def ssh_ftps(config, args, operation, path, data=None, authorization=None):
             "remote_worker()",
         ]
     ).encode()
-    bootstrap = "import resource,signal,sys; resource.setrlimit(resource.RLIMIT_CORE,(0,0)); signal.alarm(180); n=int(sys.stdin.buffer.readline()); exec(compile(sys.stdin.buffer.read(n),'<stdin>','exec'))"
+    bootstrap = "import resource,signal,sys; resource.setrlimit(resource.RLIMIT_CORE,(0,0)); signal.alarm(300); n=int(sys.stdin.buffer.readline()); exec(compile(sys.stdin.buffer.read(n),'<stdin>','exec'))"
     values = json.dumps(
         {
             "serial": config.serial,
@@ -187,6 +197,7 @@ def ssh_ftps(config, args, operation, path, data=None, authorization=None):
             "host": config.host,
             "access_code": config.access_code,
             "timeout": args.timeout,
+            "list_timeout": getattr(args, "list_timeout", 30),
             "operation": operation,
             "path": path,
             "size": len(data or b""),
@@ -206,12 +217,18 @@ def ssh_ftps(config, args, operation, path, data=None, authorization=None):
             ssh_arguments() + [args.via, "python3 -I -c " + shlex.quote(bootstrap)],
             input=stdin,
             capture_output=True,
-            timeout=min(args.timeout * 8 + 30, 190),
+            timeout=min(args.timeout * 8 + getattr(args, "list_timeout", 30) + 30, 400),
             check=False,
         )
         if result.returncode:
             raise ValueError
         reply = json.loads(result.stdout)
+        if (
+            operation == "ls"
+            and reply.get("ok") is False
+            and isinstance(reply.get("list_error"), str)
+        ):
+            raise CliError(reply["list_error"])
         if reply.get("ok") is not True or not isinstance(reply.get("result"), dict):
             raise ValueError
         return reply["result"]
@@ -244,16 +261,14 @@ def list_files(config, args):
     path = validate_path(
         "/timelapse" if args.kind == "timelapse" and args.path == "/" else args.path
     )
-    try:
-        return (
-            ssh_ftps(config, args, "ls", path)
-            if args.via
-            else ftps_operation(config, args.timeout, "ls", path)
-        )
-    except (OSError, __import__("ftplib").Error):
-        raise CliError(
-            "USB FTPS 不可用；检查 U 盘是否插入。P2S 内置存储请使用 ls --internal"
-        ) from None
+    list_timeout = getattr(args, "list_timeout", 30)
+    if not 0 < list_timeout <= 180:
+        raise CliError("list-timeout 须在 0..180 秒之间（不含 0）")
+    return (
+        ssh_ftps(config, args, "ls", path)
+        if args.via
+        else ftps_operation(config, args.timeout, "ls", path, list_timeout=list_timeout)
+    )
 
 
 def upload_file(config, args, authorization):
@@ -265,12 +280,33 @@ def upload_file(config, args, authorization):
     if args.internal:
         with internal_connection(config, args) as tunnel:
             result = tunnel.upload(source, name, authorization)
-        with internal_connection(config, args) as tunnel:
-            find_verified_model(tunnel.list_models(), name, source.stat().st_size)
+        failures = []
+        for attempt in range(2):
+            try:
+                with internal_connection(config, args) as tunnel:
+                    find_verified_model(tunnel.list_models(), name, result["bytes"])
+                break
+            except (TunnelError, OSError, CliError) as exc:
+                # Only retry the independent read, never FILE_UPLOAD itself.
+                if isinstance(exc, CliError):
+                    reason = str(exc)
+                elif isinstance(exc, TimeoutError):
+                    reason = "TCP 6000 校验连接或 LIST 超时"
+                else:
+                    reason = f"TCP 6000 校验网络失败：{type(exc).__name__}, errno={exc.errno}"
+                failures.append(f"第 {attempt + 1} 次：{reason}")
+        else:
+            raise CliError(
+                "上传已收到完成应答，但大小校验失败；不能确认成功；"
+                + "；".join(failures)
+                + "；可用 ls --internal 只读复核，勿盲目重新上传"
+            ) from None
         return {
             "transport": "TCP6000",
             "bytes": result["bytes"],
             "verified_fresh_connection": True,
+            "verification_attempts": attempt + 1,
+            "verification_warnings": failures,
         }
     data = source.read_bytes()
     return (

@@ -129,7 +129,8 @@ def test_exact_payloads():
     assert (
         dry["mode"] == 1
         and dry["close_power_conflict"] is True
-        and dry["duration"] == 4
+        and dry["duration"] is None
+        and dry["filament"] is None
     )
     assert payload("ams-drying", "stop")["mode"] == 0
     mapped = payload(
@@ -164,7 +165,7 @@ def test_exact_payloads():
         ["print", "sample.gcode.3mf", "--ams-mapping", "999"],
         ["skip-objects", "1,1"],
         ["load", "--ams-id", "136"],
-        ["ams-drying", "start", "--temperature", "70"],
+        ["ams-drying", "start", "--temperature", "0"],
     ],
 )
 def test_reject_unsafe(case):

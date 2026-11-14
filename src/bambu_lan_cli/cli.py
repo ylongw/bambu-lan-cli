@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from .ams import prepare_drying
 from .commands import WRITE_COMMANDS, build_payload
 from .common import now_cst
 from .config import init_config, load_config, validate_via
@@ -56,6 +57,7 @@ def build_parser():
 
     for c in (
         "status",
+        "ams-status",
         "hms",
         "discover",
         "media-ability",
@@ -70,7 +72,7 @@ def build_parser():
         "unload",
     ):
         p = add(c)
-        if c in ("status", "camera-status", "info", "protocol-list"):
+        if c in ("status", "ams-status", "camera-status", "info", "protocol-list"):
             p.add_argument(
                 "--json", action="store_true", help="原始结构（敏感字段脱敏）"
             )
@@ -82,6 +84,12 @@ def build_parser():
     p = add("config")
     p.add_argument("action", choices=["init", "check"])
     p = add("ls")
+    p.add_argument(
+        "--list-timeout",
+        type=float,
+        default=30,
+        help="外部 FTPS 列表超时秒数，默认 30，最大 180；连接超时用 --timeout",
+    )
     p.add_argument("path", nargs="?", default="/")
     p.add_argument("--internal", action="store_true")
     p.add_argument("--kind", choices=["model", "timelapse", "video"], default="model")
@@ -150,11 +158,18 @@ def build_parser():
         p.add_argument("--slot", type=int, default=0)
         if c == "ams-drying":
             p.add_argument("action", choices=["start", "stop"])
-            p.add_argument("--temperature", type=int, default=55)
+            p.add_argument(
+                "--temperature", type=int, help="默认 RFID 提示或耗材预设；按型号钳位"
+            )
             p.add_argument("--cooling-temp", type=int, default=45)
-            p.add_argument("--duration", type=int, default=4, help="小时，1..24")
+            p.add_argument(
+                "--duration", type=int, help="小时，默认 RFID 提示或耗材预设；最大 24"
+            )
             p.add_argument("--rotate-tray", action="store_true")
-            p.add_argument("--filament", default="PLA")
+            p.add_argument("--filament", help="默认从该 AMS 已装载托盘检测")
+            p.add_argument(
+                "--force", action="store_true", help="显式允许打印中启动；仍需双重授权"
+            )
             p.add_argument(
                 "--close-power-conflict",
                 action="store_true",
@@ -224,6 +239,9 @@ def build_parser():
     p.add_argument("id", type=int, choices=[0, 1])
     p = add("mqtt")
     p.add_argument(
+        "--force", action="store_true", help="显式允许打印中启动烘干；仍需双重授权"
+    )
+    p.add_argument(
         "name", choices=sorted(CATALOG), help="experimental；来源和字段见 protocol-list"
     )
     p.add_argument(
@@ -271,6 +289,10 @@ def dispatch(config, args):
                 )
             section, body = build_payload(args, url=verified["url"])
         with status_connection(config, args) as connection:
+            if body.get("command") == "ams_filament_drying" and body.get("mode") != 0:
+                raw = connection.query_status(raw=True)
+                body = prepare_drying(body, raw, force=args.force)
+                return connection.command(body, authorization, section)
             before = connection.query_status()
             if (
                 args.command == "print"
@@ -331,16 +353,22 @@ def dispatch(config, args):
         return snapshot(config, args)
     if args.command == "download":
         return download_file(config, args)
-    if args.command in ("status", "hms", "camera-status"):
+    if args.command in ("status", "ams-status", "hms", "camera-status"):
         with status_connection(config, args) as connection:
             if getattr(args, "json", False):
                 raw = connection.query_status(raw=True)
                 return (
-                    raw if args.command == "status" else raw["print"].get("ipcam", {})
+                    raw
+                    if args.command == "status"
+                    else raw["print"].get(
+                        "ams" if args.command == "ams-status" else "ipcam", {}
+                    )
                 )
             status = connection.query_status()
             if args.command == "camera-status":
                 return status["ipcam"]
+            if args.command == "ams-status":
+                return status["ams"]
             return status if args.command == "status" else {"errors": status["errors"]}
     if args.command == "ls":
         return list_files(config, args)

@@ -8,6 +8,7 @@ from importlib.resources import files
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
+from .ams import decode_info, number
 from .hms import decode_errors
 
 STAGES = json.loads(files("bambu_lan_cli").joinpath("stages.json").read_text())
@@ -25,6 +26,8 @@ def summarize_tray(tray):
         "nozzle_temp_min": "nozzle_min_c",
         "nozzle_temp_max": "nozzle_max_c",
         "tray_info_idx": "filament_id",
+        "drying_temp": "drying_temperature_hint_c",
+        "drying_time": "drying_duration_hint_hours",
     }
     out = {
         new: tray[old]
@@ -63,11 +66,18 @@ def summarize_ams(ams):
     for unit in ams.get("ams", []) or []:
         if not isinstance(unit, dict):
             continue
+        raw_level = number(unit.get("humidity"))
+        level = 6 - raw_level if raw_level in range(1, 6) else None
+        percent = unit.get("humidity_raw")
         units.append(
             {
                 "id": unit.get("id"),
-                "humidity_level": unit.get("humidity"),
-                "humidity_percent": unit.get("humidity_raw"),
+                **decode_info(unit),
+                "humidity_level_raw": unit.get("humidity"),
+                "humidity_level": level,
+                "humidity_percent": percent,
+                "humidity_description": f"湿度 {percent if percent is not None else '未知'}%，等级 {level if level is not None else '未知'}/5（越高越湿；Studio/HA 约定）",
+                "drying_remaining_minutes": unit.get("dry_time"),
                 "temperature_c": unit.get("temp"),
                 "drying": {
                     k: v for k, v in unit.items() if k.startswith(("dry", "heat"))

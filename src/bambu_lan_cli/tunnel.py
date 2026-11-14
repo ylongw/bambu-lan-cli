@@ -19,8 +19,10 @@ import time
 import uuid
 from pathlib import Path
 
+from .errors import CliError
 
-class TunnelError(Exception):
+
+class TunnelError(CliError):
     """Only locally generated, credential-free error messages are allowed."""
 
 
@@ -64,10 +66,13 @@ class BambuTunnelLocal:
             self._send(self.LOGIN_TX, b"bblp\0\0\0\0" + code)
             magic, payload = self._receive()
             if magic != self.LOGIN_RX:
-                raise TunnelError("凭证失败")
+                raise TunnelError(f"TCP 6000 login 响应帧类型无效：0x{magic:08x}")
             # Observed login acknowledgment is a 4-byte little-endian result.
-            if len(payload) != 4 or struct.unpack("<I", payload)[0] != 0:
-                raise TunnelError("凭证失败")
+            if len(payload) != 4:
+                raise TunnelError(f"TCP 6000 login 响应长度无效：{len(payload)}")
+            login_result = struct.unpack("<I", payload)[0]
+            if login_result != 0:
+                raise TunnelError(f"TCP 6000 login 失败，result={login_result}")
             self._send_json(
                 {
                     "sequence": 0,
@@ -83,7 +88,9 @@ class BambuTunnelLocal:
             )
             response = self._json_receive()
             if response.get("mtype") != 12291 or response.get("result") != 0:
-                raise TunnelError("TCP 6000 setup 失败")
+                result = response.get("result")
+                result = result if type(result) is int else "missing/invalid"
+                raise TunnelError(f"TCP 6000 setup 失败，result={result}")
             self.audit.append({"stage": "authentication_setup", "result": 0})
             return self
         except BaseException:
@@ -127,7 +134,7 @@ class BambuTunnelLocal:
         if size > self.MAX_FRAME:
             raise TunnelError("TCP 6000 响应帧超出上限")
         if magic not in (self.LOGIN_RX, self.CTRL_RX, 0x0000013F):
-            raise TunnelError("TCP 6000 响应帧类型无效")
+            raise TunnelError(f"TCP 6000 响应帧类型无效：0x{magic:08x}")
         return magic, self._read_exact(size)
 
     def _packet_receive(self):
@@ -136,7 +143,7 @@ class BambuTunnelLocal:
             if magic == 0x0000013F:
                 continue
             if magic != self.CTRL_RX:
-                raise TunnelError("TCP 6000 非预期响应类型")
+                raise TunnelError(f"TCP 6000 非预期响应类型：0x{magic:08x}")
             try:
                 text, _, binary = payload.partition(b"\n\n")
                 message = json.loads(text)
@@ -454,7 +461,9 @@ def find_verified_model(entries, name, size=None):
     if type(entry.get("size")) is not int or entry["size"] <= 0:
         raise TunnelError("LIST_INFO 文件大小无效")
     if size is not None and entry["size"] != size:
-        raise TunnelError("LIST_INFO 文件大小与本地不匹配")
+        raise TunnelError(
+            f"LIST_INFO 文件大小与本地不匹配：expected={size}, actual={entry['size']}"
+        )
     return {
         "name": name,
         "size": entry["size"],

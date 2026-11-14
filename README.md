@@ -29,6 +29,7 @@ Python 3.14 已验证，最低 Python 3.11。`config.example.yaml` 只保留占�
 | `config init/check` | `bambu-lan config check`：本地配置初始化/校验 |
 | `status` | `bambu-lan status`：任务名、进度、层数、剩余分钟、上海时区预计完成时间、阶段/名称、速度、温度、风扇、灯、AMS 耗材/余量/湿度/烘干、HMS、print_error、存储、相机与 AI |
 | `status --json` | `bambu-lan status --json`：保留 pushall 原始字段结构与版本响应，敏感值脱敏 |
+| `ams-status` | `bambu-lan ams-status`：AMS 型号、湿度百分比/等级、温度、烘干状态、剩余分钟和托盘 RFID 烘干提示；`--json` 返回脱敏原始 AMS |
 | `hms` | `bambu-lan hms`：中英文错误说明；未知编码保留数值 |
 | `camera-status` | `bambu-lan camera-status`：ipcam_record、timelapse、resolution、tl_*、RTSP 可用性；`--json` 返回脱敏原始 ipcam |
 | `get-version` / `info` | `bambu-lan get-version`：独立 `info.get_version` 查询 |
@@ -38,6 +39,10 @@ Python 3.14 已验证，最低 Python 3.11。`config.example.yaml` 只保留占�
 | `protocol-list` | `bambu-lan protocol-list --json`：离线查看全部 MQTT schema、读写属性、字段和来源，无需私有配置 |
 
 `status` 仅发送 `pushall` / `get_version`，合并增量报告；未知状态字段可通过 `--json` 获取。完成时间按设备剩余分钟估计，仅在 RUNNING/PREPARE 时计算，暂停/空闲不推算。阶段和能力位因固件不同而不同，未知值不猜测。P1 不应频繁 pushall；不要高频循环调用。
+
+`status` 和 `ams-status` 按 AMS `info` 的低 4 位映射型号：1=AMS、2=AMS Lite、3=AMS 2 Pro、4=AMS HT；缺失/未知不猜型号。烘干状态来自 `info` 的 4–7 位，剩余时间 `dry_time` 单位为分钟。
+
+湿度百分比来自 `humidity_raw`，等级**不由百分比自行推算**。打印机原始 `humidity` 是 **5 最干、1 最湿**；[ha-bambulab 的显示约定](https://github.com/greghesp/ha-bambulab/blob/6466a6c45f861d9373779c7c2aae82d3afc1d1f3/custom_components/bambu_lab/definitions.py#L869-L875)与当前 Studio/Handy 一样，显示 `6 - 原始等级`，即 **1 最干、5 最湿**。摘要的 `humidity_level` 使用显示等级，`humidity_level_raw` 保留设备值，例如 `湿度 43%，等级 4/5（越高越湿；Studio/HA 约定）`；缺失值显示未知。`--json` 保留原始字段方向。
 
 输出中的 access code、序列号、其他设备身份、RFID/UUID、网络信息、URL 和家目录身份统一脱敏。RTSP 地址不输出账号、密码、token 或完整地址。任务名和文件名按需求显示，请将实际运行输出作为私有数据处理，勿加入 Git。`discover` 即使指定 `--via` 仍在本地 LAN 发现；路由网络发现为空不代表设备离线。
 
@@ -56,6 +61,15 @@ Python 3.14 已验证，最低 Python 3.11。`config.example.yaml` 只保留占�
 
 外部 USB/TF 的延时摄影在 FTPS `/timelapse`；内部延时摄影通过 TCP 6000 `storage=internal`，模型维持 `emmc`。这两个存储不是同一目录。P2S/H2 的 TCP 6000 是文件服务，A1/P1 同端口是 JPEG 相机，不能互换。RTSPS 默认用于其余机型，需要本机启用 LAN Liveview；PyAV/Pillow 为可选依赖，认证只在内存中，不传给外部进程。当前仅提供单帧截图。
 
+外部 FTPS 连接/认证由 `--timeout` 控制（默认 12 秒，最大 60）；目录列表单独使用 `--list-timeout`（默认 30 秒，最大 180），直连和 SSH 均生效。例如：
+
+```sh
+bambu-lan ls /timelapse --timeout 30 --list-timeout 90
+bambu-lan media-ability
+```
+
+错误会说明超时发生在 TCP 连接、TLS 握手、欢迎响应、登录认证/保护协商，还是连接认证成功后的列表阶段；425/426 等表示数据通道/存储暂不可用，530 表示认证失败。550 只能说明路径不存在、权限不足或存储未挂载/不可访问，设备未区分原因，CLI 不会断言一定没插卡。先检查打印机是否识别 U 盘/TF 卡、`status` 存储字段和 `media-ability`；能力包含 udisk 不等于当前已挂载，也不保证 FTPS 可达。服务器原始错误中的私人路径不回显。
+
 固件可能允许列出内部模型却拒绝读取/删除（result 2，受 fun2 bit 17 等能力限制）；CLI 如实报错，不伪造支持。FTPS 超时或未挂载存储时可尝试 `ls --internal --kind timelapse`，但这不保证外部存储可访问。
 
 ## 带双重授权的变更命令
@@ -72,13 +86,34 @@ Python 3.14 已验证，最低 Python 3.11。`config.example.yaml` 只保留占�
 | 温度/工具 | `temp nozzle 220`；`temp bed 60`；`chamber 40 --temper-check`；`airduct 0`；`door 1`（0 关闭、1 警告、2 暂停）；`select-tool 0` |
 | 喷嘴/校准 | `nozzle --diameter 0.4 --material hardened_steel`（set_accessories）；`nozzle --protocol set-nozzle --diameter 0.4 --id 0 --type HH01 --wear 0`；`calibration --option 0x0f` |
 | 打印选项 | `print-option sound_enable disable`；`print-option auto_recovery enable`；`print-option auto_switch_filament enable`；`print-option filament_tangle_detect enable`；`print-option air_print_detect enable`；`print-option nozzle_blob_detect enable`；`print-option air_purification 1`；`print-option nozzle_blob_detect_v2 2` |
-| AMS | `ams-control resume`（也支持 pause/reset/done/abort）；`ams-rfid --ams-id 0 --slot 0`；`ams-settings --ams-id 0 --no-startup-read --tray-read --calibrate-remain`；`ams-drying start --temperature 55 --duration 4`；`ams-drying stop` |
+| AMS | `ams-control resume`（也支持 pause/reset/done/abort）；`ams-rfid --ams-id 0 --slot 0`；`ams-settings --ams-id 0 --no-startup-read --tray-read --calibrate-remain`；`ams-drying start --ams-id 0`；`ams-drying start --filament PETG --temperature 60 --duration 8`；`ams-drying stop` |
 | 耗材 | `ams-filament --ams-id 0 --slot 0 --material PLA --profile GFA00 --color FFFFFFFF --min-temp 190 --max-temp 230`；`load --ams-id 0 --slot 0 --temperature 220`；`unload` |
 | G-code | `gcode 'M400'`：原始 G-code，仍需双重授权 |
 
 完整 AI 模块：`printing_monitor`、`spaghetti_detector`（炒面）、`buildplate_marker_detector`、`first_layer_inspector`、`pileup_detector`、`clump_detector`、`airprint_detector`、`plate_offset_switch`、`fod_check`、`model_movement_check`。`--sensitivity` 支持 never_halt/low/medium/high，省略时不发送该字段；各机型不一定支持每个模块。
 
-喷嘴最高 300°C、热床 110°C、腔温 60°C；烘干 45–65°C、冷却温度 45–65°C、时长 1–24 小时。`--close-power-conflict` 必须显式指定。G-code 是高级入口，其任意代码不能靠这些温度限制约束。Airduct 模式 0/1/2 按固件能力选择，2 可能涉及激光机型。
+`ams-drying start --ams-id 0 --execute --confirm-serial YOUR_SERIAL` 默认检测该 AMS **所有已装载托盘**的 `tray_type`，不再固定 PLA。有 `tray_exist_bits` 时优先按物理在位位图过滤空槽的旧信息。多托盘类型冲突、为空或未知时拒绝，要求显式 `--filament`；指定耗材意味着用户已检查整箱耗材适用性，不会改变托盘设置。
+
+温度/时长优先级：显式 `--temperature` / `--duration` > 同耗材托盘的 RFID `drying_temp` / `drying_time`（正值，小时）> 耗材预设。多个 RFID 提示冲突时要求显式参数。缺省预设采用 [Bambu Studio PLA](https://github.com/bambulab/BambuStudio/blob/930fe93851afbc76b1c64dd37d8728b6a9afc89c/resources/profiles/BBL/filament/fdm_filament_pla.json) 的 45°C/12 小时及 [PETG](https://github.com/bambulab/BambuStudio/blob/930fe93851afbc76b1c64dd37d8728b6a9afc89c/resources/profiles/BBL/filament/fdm_filament_pet.json) 的 65°C/12 小时（空闲烘干预设）；其他已知类型的型号对应预设如下（温度°C / 小时）；均来自同一 Studio 版本的 `fdm_filament_*` 空闲烘干预设。未知、复合/特殊耗材无 RFID 提示时要求显式温度和时长，不按名称前缀套用预设。
+
+| 耗材 | AMS 2 Pro | AMS HT |
+|---|---|---|
+| PLA | 45 / 12 | 45 / 12 |
+| PETG | 65 / 12 | 65 / 12 |
+| ABS、ASA、PC | 65 / 12 | 80 / 8 |
+| PA | 65 / 12 | 85 / 12 |
+| PVA | 65 / 12 | 85 / 18 |
+| TPU | 65 / 12 | 75 / 18 |
+
+所有启动路径（含高级 `mqtt print.ams_filament_drying`）先查询状态，按已识别型号钳位：AMS 2 Pro 45–65°C、AMS HT 45–85°C，时长 1–24 小时；冷却温度默认 45°C，钳位在 45°C 与实际烘干温度之间。未知型号或无已确认烘干能力的 AMS 拒绝启动。参数不会突破这些上限，但低于耗材要求的温度可能无法充分干燥。
+
+打印中、有任务或状态未知时默认拒绝启动烘干。只有显式 `--force` 才放行，且**仍需 `--execute` 和精确 `--confirm-serial`**；此规则同样覆盖高级 MQTT 入口。`--force` 不改变耗材检测或型号上限。停止烘干也始终需要双重授权。
+
+当前只发送确认的定时模式 `mode=1` 与停止 `mode=0`。`mode=2`（目标湿度）在 OBN 仅确认 experimental `OnHumidity` 枚举，未确认完整请求与湿度目标语义；CLI 拒绝发送，不编造字段。来源与限制见 [协议覆盖清单](docs/PROTOCOL_COVERAGE.md)。本轮正在打印的真机未执行任何烘干命令，烘干逻辑仅由 mock 验证。
+
+内部上传只有收到完成应答、并在新连接 LIST 中确认唯一文件、内部路径和大小一致后才报告成功。首轮验证异常时最多再建一次连接做只读 LIST，**不重传文件**。成功结果中的 `verification_warnings` 保留首轮原因；两次校验失败则返回失败并列出帧类型/状态码/超时/大小差异，文件可能已到达也不声称成功。
+
+喷嘴最高 300°C、热床 110°C、腔温 60°C。`--close-power-conflict` 必须显式指定。G-code 是高级入口，其任意代码不能靠这些温度限制约束。Airduct 模式 0/1/2 按固件能力选择，2 可能涉及激光机型。
 
 AMS 映射接受绝对槽位编号 0–103、128–135、-1、254/255，生成 ams_mapping 和 ams_mapping2。默认无 AMS；使用者需核对 plate 的耗材数。上传只允许安全 ASCII `.gcode.3mf` 基名，最大 200 MiB，拒绝覆盖；上传不会自动打印。内部上传流水发送分块，检查 MD5 并用独立连接复查。FTPS 改名/上传的覆盖检查不能完全排除其他客户端的竞争，应使用唯一文件名。
 

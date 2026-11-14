@@ -13,6 +13,16 @@ MQTT 从 BPM/HA 的命令模板、BPM 的发送函数、OBN 第 12 章逐项提�
 
 `mqtt SECTION.COMMAND --params '{...}'` 是 experimental 的高级入口，只接受目录内命令和已知字段/类型；无参数显式传 `{}`。`protocol-list --json` 给出字段、必需项、来源和只读属性。所有变更都必须 `--execute --confirm-serial YOUR_SERIAL`，底层 MQTT/FTPS/隧道再次检查。只读白名单不能夹带写字段。无匹配 ACK 只读复查一次，不重发；不确定结果作为失败返回。旧协议/新协议变体不自动互相回退。
 
+## 本轮修复：上传校验、AMS 与外部列表
+
+- TCP 6000：仍使用已验证 OBN 16 字节帧头、login/setup，不扩大允许帧类型到未经验证的值。内部上传完成后的独立 LIST 验证最多两次，每次使用新 TLS 会话，只重试读取；异常帧报十六进制类型，LIST 失败保留 result，大小不符报 expected/actual。成功必须通过唯一模型/内部路径/大小验证；重试成功保留首次异常，最终失败保留两次原因。
+- AMS 型号与烘干状态：[OBN fields-ams](https://github.com/ClusterM/open-bamboo-networking/blob/77de55a8c696c53125ca297bdf3fdf1258772335/research/12.01.03-fields-ams.md) 的 info 低 4 位为型号、4–7 位为烘干状态；[BPM bambutools](https://github.com/synman/bambu-printer-manager/blob/9eb424da884fc77909ede0b9353d0dfd03cb6fbc/src/bpm/bambutools.py) 对照状态枚举。`dry_time` 为剩余分钟，托盘 `drying_time` 为建议小时。
+- 湿度方向：[HA definitions.py](https://github.com/greghesp/ha-bambulab/blob/6466a6c45f861d9373779c7c2aae82d3afc1d1f3/custom_components/bambu_lab/definitions.py#L869-L875) 明确以 `6 - humidity_index` 对齐 Studio/Handy 的 1=干、5=湿，设备原始值相反。`status` / 新增只读 `ams-status` 同时显示百分比、显示等级及方向、原始等级、型号、温度、烘干状态与剩余分钟；原始 JSON 不反转字段。
+- 默认从已装载托盘检测耗材，在位位图优先；多类型/未知不自动挑选。RFID `drying_temp`/`drying_time` 优先于预设；多提示冲突需显式参数。补充参考 Bambu Studio `930fe93851afbc76b1c64dd37d8728b6a9afc89c`：[PLA preset](https://github.com/bambulab/BambuStudio/blob/930fe93851afbc76b1c64dd37d8728b6a9afc89c/resources/profiles/BBL/filament/fdm_filament_pla.json)、[PETG preset](https://github.com/bambulab/BambuStudio/blob/930fe93851afbc76b1c64dd37d8728b6a9afc89c/resources/profiles/BBL/filament/fdm_filament_pet.json)，取空闲烘干预设 45°C/12h 与 65°C/12h；同时按该版本 `fdm_filament_abs/asa/pa/pc/pva/tpu.json` 的前两组值提供型号对应预设（详见 README 表格），其他未知或复合类型无 RFID 时需显式参数。
+- 上限按 [HA services.yaml](https://github.com/greghesp/ha-bambulab/blob/6466a6c45f861d9373779c7c2aae82d3afc1d1f3/custom_components/bambu_lab/services.yaml)：AMS 2 Pro 65°C、AMS HT 85°C、1–24 小时。专用与高级 MQTT 启动入口均查询状态、按型号钳位；打印中/未知需显式 `--force`，双重授权始终保留。本轮仅 mock 烘干路径，没有真机写入验证。
+- `mode=2` 为 experimental 语义：[OBN ams-filament](https://github.com/ClusterM/open-bamboo-networking/blob/77de55a8c696c53125ca297bdf3fdf1258772335/research/12.07-ams-filament.md) 只确认 OnHumidity 枚举，示例及 builder 均为定时模式、humidity=0；没有已确认的完整目标湿度请求，故高级入口也拒绝 mode=2，不推测目标值/持续时间。
+- 外部 FTPS：列表默认等待 30 秒、`ls --list-timeout` 可调至 180 秒；连接/认证仍用 `--timeout`。直连与 SSH 保留相同错误类别：TCP/TLS/欢迎响应/登录认证超时、已认证后列表超时、530、425/426/450/451、550。550 无法唯一归因于未插卡/权限/不存在，明确说明歧义并提示检查识别状态、media-ability。错误不回显服务器私人路径。media-ability 的 udisk 能力不证明当前挂载或 FTPS 可达。
+
 ## 缺口摘要
 
 原仓库缺少相机/AI、完整任务/存储摘要、文件下载/删除、AMS 设置、喷嘴/腔温/门检测、校准和系统/升级请求入口。本次均补入；低频、机型差异较大的命令通过 experimental schema 入口开放。专用入口提供常用参数和限制；其余只接受来源已知的参数对象。RTSPS 及 A1/P1 JPEG 可下载单帧，RTSP 会话由可选 PyAV 在内存中处理认证。
